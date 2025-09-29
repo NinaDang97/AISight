@@ -1,4 +1,4 @@
-package com.aisightnew
+package com.aisight2
 
 import android.app.Application
 import com.facebook.react.PackageList
