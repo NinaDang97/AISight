@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "AISightNew.app"
-               BlueprintName = "AISightNew"
-               ReferencedContainer = "container:AISightNew.xcodeproj">
+               BuildableName = "AISight.app"
+               BlueprintName = "AISight"
+               ReferencedContainer = "container:AISight.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "AISightNewTests.xctest"
-               BlueprintName = "AISightNewTests"
-               ReferencedContainer = "container:AISightNew.xcodeproj">
+               BuildableName = "AISightTests.xctest"
+               BlueprintName = "AISightTests"
+               ReferencedContainer = "container:AISight.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "AISightNew.app"
-            BlueprintName = "AISightNew"
-            ReferencedContainer = "container:AISightNew.xcodeproj">
+            BuildableName = "AISight.app"
+            BlueprintName = "AISight"
+            ReferencedContainer = "container:AISight.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "AISightNew.app"
-            BlueprintName = "AISightNew"
-            ReferencedContainer = "container:AISightNew.xcodeproj">
+            BuildableName = "AISight.app"
+            BlueprintName = "AISight"
+            ReferencedContainer = "container:AISight.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
