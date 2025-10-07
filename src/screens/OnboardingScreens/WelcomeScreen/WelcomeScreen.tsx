@@ -13,7 +13,8 @@ export const WelcomeScreen: React.FC = () => {
   const navigation = useNavigation<WelcomeScreenNavigationProp>();
 
   const handleGetStarted = () => {
-    navigation.navigate('Permissions');
+    //navigation.navigate('Permissions');
+    navigation.navigate('Main'); // Navigate to main for now TODO: change to intended screen
   };
 
   return (
@@ -27,13 +28,19 @@ export const WelcomeScreen: React.FC = () => {
         <View style={styles.contentContainer}>
           <Text style={styles.title}>Welcome to AISight</Text>
           <Text style={styles.description}>
-            Track marine vessels in real-time, access detailed information, and stay updated with the
-            latest maritime traffic data.
+            Track marine vessels in real-time, access detailed information, and stay updated with
+            the latest maritime traffic data.
           </Text>
 
           <View style={styles.featuresContainer}>
-            <FeatureItem title="Real-time Tracking" description="Monitor vessel movements as they happen" />
-            <FeatureItem title="Vessel Details" description="Access comprehensive vessel information" />
+            <FeatureItem
+              title="Real-time Tracking"
+              description="Monitor vessel movements as they happen"
+            />
+            <FeatureItem
+              title="Vessel Details"
+              description="Access comprehensive vessel information"
+            />
             <FeatureItem title="Search & Filter" description="Find specific vessels with ease" />
           </View>
         </View>

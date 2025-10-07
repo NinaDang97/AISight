@@ -5,10 +5,11 @@ import { Routes, RootStackParamList } from '../routes';
 // Import navigators and screens
 import { OnboardingNavigator } from './OnboardingNavigator';
 import { WelcomeScreen } from '../../screens/OnboardingScreens/WelcomeScreen';
+import { TabNavigator } from './TabNavigator';
 
 // Create placeholders using the WelcomeScreen
 const SplashScreen = () => <WelcomeScreen />;
-const MainNavigator = () => <WelcomeScreen />;
+const MainNavigator = () => <TabNavigator />;
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -21,18 +22,9 @@ export const RootNavigator: React.FC = () => {
         cardStyle: { backgroundColor: 'white' },
       }}
     >
-      <Stack.Screen
-        name={Routes.Root.SPLASH}
-        component={SplashScreen}
-      />
-      <Stack.Screen
-        name={Routes.Root.ONBOARDING}
-        component={OnboardingNavigator}
-      />
-      <Stack.Screen
-        name={Routes.Root.MAIN}
-        component={MainNavigator}
-      />
+      <Stack.Screen name={Routes.Root.SPLASH} component={SplashScreen} />
+      <Stack.Screen name={Routes.Root.ONBOARDING} component={OnboardingNavigator} />
+      <Stack.Screen name={Routes.Root.MAIN} component={MainNavigator} />
     </Stack.Navigator>
   );
 };
