@@ -1,3 +1,8 @@
+// This file provides string constants for route names.
+// These constants are used in `src/navigation/routes/index.ts` to build the Routes object.
+// Using constants prevents typos and enables IDE autocomplete.
+// The naming convention: SCREEN_ROUTES for route groups, SCREEN_NAME for individual routes.
+
 // Root level routes
 export const ROOT_ROUTES = {
   SPLASH: 'Splash',
@@ -14,41 +19,28 @@ export const ONBOARDING_ROUTES = {
 
 // Main tab routes
 export const TAB_ROUTES = {
+  HOME_TAB: 'HomeTab',
   MAP_TAB: 'MapTab',
-  VESSEL_LIST_TAB: 'VesselListTab',
-  SEARCH_TAB: 'SearchTab',
+  PROFILE_TAB: 'ProfileTab',
   SETTINGS_TAB: 'SettingsTab',
+};
+
+// Home stack routes
+export const HOME_ROUTES = {
+  HOME: 'Home',
 };
 
 // Map stack routes
 export const MAP_ROUTES = {
   MAP: 'Map',
-  VESSEL_DETAILS: 'VesselDetails',
 };
 
-// Vessel stack routes
-export const VESSEL_ROUTES = {
-  VESSEL_LIST: 'VesselList',
-  VESSEL_DETAILS: 'VesselDetails',
-  VESSEL_FILTER: 'VesselFilter',
-};
-
-// Search stack routes
-export const SEARCH_ROUTES = {
-  SEARCH: 'Search',
-  SEARCH_RESULTS: 'SearchResults',
-  VESSEL_DETAILS: 'VesselDetails',
+// Profile stack routes
+export const PROFILE_ROUTES = {
+  PROFILE: 'Profile',
 };
 
 // Settings stack routes
 export const SETTINGS_ROUTES = {
   SETTINGS: 'Settings',
-  ABOUT: 'About',
-  PREFERENCES: 'Preferences',
-  HELP: 'Help',
-};
-
-// Modal routes
-export const MODAL_ROUTES = {
-  FILTER_MODAL: 'FilterModal',
 };

@@ -6,14 +6,21 @@ import { colors, typography, spacing } from '../../../styles';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../../navigation/types';
+import { Routes } from '../../../navigation/routes';
 
-type WelcomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Welcome'>;
+type WelcomeScreenNavigationProp = StackNavigationProp<RootStackParamList>;
 
 export const WelcomeScreen: React.FC = () => {
   const navigation = useNavigation<WelcomeScreenNavigationProp>();
 
   const handleGetStarted = () => {
-    navigation.navigate('Permissions');
+    // Navigate directly to the Main tab navigator
+    navigation.navigate(Routes.Root.MAIN, {
+      screen: Routes.Tabs.MAP,
+      params: {
+        screen: Routes.Map.MAP,
+      },
+    });
   };
 
   return (
