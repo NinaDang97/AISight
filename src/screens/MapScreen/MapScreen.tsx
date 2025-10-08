@@ -3,56 +3,60 @@ import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaWrapper } from '../../components/common/SafeAreaWrapper';
 import { Button } from '../../components/common/Button';
 import { colors, typography, spacing } from '../../styles';
+import Map from '../../map/Map';
+
+const MapControls: React.FC = () => (
+  <View style={styles.controlsOverlay}>
+    <Button title="Zoom In" variant="secondary" size="small" />
+    <Button title="Zoom Out" variant="secondary" size="small" />
+    <Button title="Center" variant="secondary" size="small" />
+  </View>
+);
+
+const VesselInfoCard: React.FC = () => (
+  <View style={styles.vesselCard}>
+    <Text style={typography.heading4}>MV Ocean Explorer</Text>
+    <View style={styles.statusBadge}>
+      <Text style={[typography.caption, { color: colors.textInverse }]}>Active</Text>
+    </View>
+    <View style={styles.detailRow}>
+      <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Speed:</Text>
+      <Text style={typography.body}>12.5 knots</Text>
+    </View>
+    <View style={styles.detailRow}>
+      <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Course:</Text>
+      <Text style={typography.body}>245°</Text>
+    </View>
+    <View style={styles.detailRow}>
+      <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Last Update:</Text>
+      <Text style={typography.body}>2 min ago</Text>
+    </View>
+    <Button title="View Details" variant="primary" size="medium" />
+  </View>
+);
+
+const LegendSection: React.FC = () => (
+  <View style={styles.legend}>
+    <View style={styles.legendItem}>
+      <View style={[styles.legendCircle, { backgroundColor: colors.primary }]} />
+      <Text style={typography.caption}>Cargo</Text>
+    </View>
+    <View style={styles.legendItem}>
+      <View style={[styles.legendCircle, { backgroundColor: colors.secondary }]} />
+      <Text style={typography.caption}>Passenger</Text>
+    </View>
+  </View>
+);
 
 export const MapScreen: React.FC = () => {
   return (
     <SafeAreaWrapper backgroundColor={colors.background} barStyle="dark-content">
       <View style={styles.container}>
-        {/* Map Placeholder Section */}
-        <View style={styles.mapPlaceholder}>
-          <Text style={typography.heading3}>Map View</Text>
-          <Text style={typography.body}>Marine Traffic Tracker</Text>
-        </View>
+        <Map />
 
         {/* Map Controls Overlay */}
-        <View style={styles.controlsOverlay}>
-          <Button title="Zoom In" variant="secondary" size="small" />
-          <Button title="Zoom Out" variant="secondary" size="small" />
-          <Button title="Center" variant="secondary" size="small" />
-        </View>
-
         {/* Vessel Info Card */}
-        <View style={styles.vesselCard}>
-          <Text style={typography.heading4}>MV Ocean Explorer</Text>
-          <View style={styles.statusBadge}>
-            <Text style={[typography.caption, { color: colors.textInverse }]}>Active</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Speed:</Text>
-            <Text style={typography.body}>12.5 knots</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Course:</Text>
-            <Text style={typography.body}>245°</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Last Update:</Text>
-            <Text style={typography.body}>2 min ago</Text>
-          </View>
-          <Button title="View Details" variant="primary" size="medium" />
-        </View>
-
         {/* Legend Section */}
-        <View style={styles.legend}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendCircle, { backgroundColor: colors.primary }]} />
-            <Text style={typography.caption}>Cargo</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendCircle, { backgroundColor: colors.secondary }]} />
-            <Text style={typography.caption}>Passenger</Text>
-          </View>
-        </View>
       </View>
     </SafeAreaWrapper>
   );
