@@ -5,11 +5,7 @@ import { Routes, RootStackParamList } from '../routes';
 // Import navigators and screens
 import { OnboardingNavigator } from './OnboardingNavigator';
 import { MainTabNavigator } from './MainTabNavigator';
-import { WelcomeScreen } from '../../screens/OnboardingScreens/WelcomeScreen';
-
-// Create placeholder for SplashScreen using WelcomeScreen
-// TODO: Replace with a proper SplashScreen implementation showing app logo/branding
-const SplashScreen = () => <WelcomeScreen />;
+import { SplashScreen } from '../../screens/SplashScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -18,7 +14,7 @@ const Stack = createStackNavigator<RootStackParamList>();
  *
  * **Navigation Hierarchy:**
  * - Root Stack Navigator (this component)
- *   - Splash Screen (placeholder)
+ *   - Splash Screen (animated splash with AISight branding)
  *   - Onboarding Navigator (stack of onboarding screens)
  *   - Main Tab Navigator (bottom tabs with individual stacks)
  *     - Home Stack Navigator
@@ -27,7 +23,7 @@ const Stack = createStackNavigator<RootStackParamList>();
  *     - Settings Stack Navigator
  *
  * **App Flow:**
- * 1. Splash → Shows on app launch (currently placeholder)
+ * 1. Splash →Shows on app launch with animated logo
  * 2. Onboarding → Guided setup for new users
  * 3. Main → Primary app interface with 4 bottom tabs (Home, Map, Profile, Settings)
  *
@@ -39,7 +35,6 @@ const Stack = createStackNavigator<RootStackParamList>();
  *
  * **Future Enhancements:**
  * - Add authentication stack between Splash and Main
- * - Implement proper SplashScreen with animations
  * - Add modal screens at root level (e.g., notifications, alerts)
  */
 export const RootNavigator: React.FC = () => {
