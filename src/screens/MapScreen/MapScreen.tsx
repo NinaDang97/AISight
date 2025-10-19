@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Modal, Text, StyleSheet } from 'react-native';
 import { SafeAreaWrapper } from '../../components/common/SafeAreaWrapper';
 import { Button } from '../../components/common/Button';
 import { colors, typography, spacing } from '../../styles';
@@ -13,27 +13,82 @@ const MapControls: React.FC = () => (
   </View>
 );
 
-const VesselInfoCard: React.FC = () => (
-  <View style={styles.vesselCard}>
-    <Text style={typography.heading4}>MV Ocean Explorer</Text>
-    <View style={styles.statusBadge}>
-      <Text style={[typography.caption, { color: colors.textInverse }]}>Active</Text>
-    </View>
-    <View style={styles.detailRow}>
-      <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Speed:</Text>
-      <Text style={typography.body}>12.5 knots</Text>
-    </View>
-    <View style={styles.detailRow}>
-      <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Course:</Text>
-      <Text style={typography.body}>245°</Text>
-    </View>
-    <View style={styles.detailRow}>
-      <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Last Update:</Text>
-      <Text style={typography.body}>2 min ago</Text>
-    </View>
-    <Button title="View Details" variant="primary" size="medium" />
-  </View>
-);
+const VesselAISDetails: React.FC = () => {
+  /*
+    TODO: 
+    - get data from api
+    - clean design
+  */
+
+  const [modalVisible, setModalVisible] = React.useState<boolean>(false);
+
+  return (
+    <Modal visible={modalVisible} transparent={true}>
+      <View style={styles.centeredView}>
+        <View style={styles.modalView}>
+          <Text style={styles.modalText}>Vessel AIS Details</Text>
+          <Text>- Datetime UTC</Text>
+          <Text>- Position Lat/Long</Text>
+          <Text>- IMO / MMSI</Text>
+          <Text>- Course</Text>
+          <Text>- Speed</Text>
+          <Text>- Heading</Text>
+          <Text>- Navigation status</Text>
+          <Text>- Vessel Name</Text>
+          <Text>- Vessel type</Text>
+          <Text>- Callsign</Text>
+          <Text>- Length</Text>
+          <Text>- Width</Text>
+          <Text>- Draught</Text>
+          <Text>- Destination</Text>
+          <Text>- ETA</Text>
+          <Text style={styles.modalText} />
+          <Button
+            title="Close"
+            variant="primary"
+            size="small"
+            onPress={() => setModalVisible(!modalVisible)}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const VesselInfoCard: React.FC = () => {
+  /*
+    TODO: when a vessel dot is pressed, show this component
+  */
+  const handleButtonPress = () => {
+    console.log('hello');
+  };
+
+  return (
+    <>
+      <VesselAISDetails />
+
+      <View style={styles.vesselCard}>
+        <Text style={typography.heading4}>MV Ocean Explorer</Text>
+        <View style={styles.statusBadge}>
+          <Text style={[typography.caption, { color: colors.textInverse }]}>Active</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Speed:</Text>
+          <Text style={typography.body}>12.5 knots</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Course:</Text>
+          <Text style={typography.body}>245°</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Last Update:</Text>
+          <Text style={typography.body}>2 min ago</Text>
+        </View>
+        <Button title="View Details" variant="primary" size="medium" onPress={handleButtonPress} />
+      </View>
+    </>
+  );
+};
 
 const LegendSection: React.FC = () => (
   <View style={styles.legend}>
@@ -53,10 +108,11 @@ export const MapScreen: React.FC = () => {
     <SafeAreaWrapper backgroundColor={colors.background} barStyle="dark-content">
       <View style={styles.container}>
         <Map />
+        <VesselInfoCard />
+        <VesselAISDetails />
 
-        {/* Map Controls Overlay */}
-        {/* Vessel Info Card */}
-        {/* Legend Section */}
+        {/*<MapControls />*/}
+        {/*<LegendSection />*/}
       </View>
     </SafeAreaWrapper>
   );
@@ -122,5 +178,29 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     marginRight: spacing.small,
+  },
+  centeredView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalView: {
+    margin: 20,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 50,
+    alignItems: 'left',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalText: {
+    marginBottom: 15,
+    textAlign: 'center',
   },
 });
