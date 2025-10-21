@@ -8,7 +8,7 @@ import {
 } from '@maplibre/maplibre-gl-style-spec';
 import * as defaultMapStyle from '../map-styles/maplibre-default-style.json';
 import * as basicMapStyle from '../map-styles/maptiler-basic-gl-style.json';
-import { gnssMockFixes } from './gnss-mock';
+import { gnssMockFixes } from '../../logs/native-module/gnss-mock';
 
 // You can replace this with any valid MapLibre style JSON e.g. the basicMapStyle.
 // It however requires you to have the api key from https://docs.maptiler.com/cloud/api/authentication-key/
@@ -27,15 +27,31 @@ export const addHerwood2CapeLayer = (prevStyle: StyleSpecification): StyleSpecif
   };
 };
 
-export const addPointLayer = (prevStyle: StyleSpecification): StyleSpecification => {
+export const addShipLayer = (prevStyle: StyleSpecification): StyleSpecification => {
+  const baseStyle = removeShipLayer(prevStyle);
+
   return {
-    ...prevStyle,
+    ...baseStyle,
     sources: {
-      ...prevStyle.sources,
+      ...(baseStyle.sources ?? {}),
       'fintraffic-ships': herwoodCenteredShipSource,
       'plain-point': plainPointSource,
     },
-    layers: [...prevStyle.layers, shipLayer, plainPointLayer, shipTextLayer],
+    layers: [...(baseStyle.layers ?? []), shipLayer, plainPointLayer, shipTextLayer],
+  };
+};
+
+export const removeShipLayer = (prevStyle: StyleSpecification): StyleSpecification => {
+  const sources = baseStyleSourcesWithoutShips(prevStyle.sources);
+  const layers = (prevStyle.layers ?? []).filter(
+    (layer) =>
+      layer.id !== shipLayer.id && layer.id !== plainPointLayer.id && layer.id !== shipTextLayer.id,
+  );
+
+  return {
+    ...prevStyle,
+    sources,
+    layers,
   };
 };
 
@@ -48,7 +64,7 @@ export const addGnssMockLayer = (prevStyle: StyleSpecification): StyleSpecificat
       ...(baseStyle.sources ?? {}),
       'gnss-mock': gnssMockSource,
     },
-    layers: [...(baseStyle.layers ?? []), gnssTrackLayer, gnssPointLayer],
+    layers: [...(baseStyle.layers ?? []), gnssTrackLayer, gnssPointLayer, gnssTextLayer],
   };
 };
 
@@ -172,7 +188,14 @@ const gnssTrackLayer: LineLayerSpecification = {
   source: 'gnss-mock',
   paint: {
     'line-width': 3,
-    'line-color': '#1d4ed8',
+    'line-color': [
+      'interpolate',
+      ['linear'],
+      ['coalesce', ['get', 'gnssSatUsed'], 0],
+      0, '#991b1b',
+      5, '#f97316',
+      10, '#84cc16',
+    ]
   },
 };
 
@@ -182,12 +205,29 @@ const gnssPointLayer: CircleLayerSpecification = {
   source: 'gnss-mock',
   filter: ['==', ['geometry-type'], 'Point'],
   paint: {
-    'circle-radius': 4,
-    'circle-color': '#f97316',
+    'circle-radius': 8,
+    'circle-color': [
+      'step',
+      ['coalesce', ['get', 'gnssAvgCn0'], 0],
+      '#ef4444',
+      25, '#f59e0b',
+      30, '#22c55e',
+    ],
     'circle-stroke-width': 1,
     'circle-stroke-color': '#ffffff',
   },
 };
+
+const gnssTextLayer: SymbolLayerSpecification = {
+  id: 'gnss-text',
+  type: 'symbol',
+  source: 'gnss-mock',
+  layout: {
+    'text-field': ['get', 'gnssAvgCn0'],
+    'text-size': 12,
+    'text-offset': [0, 1.5],
+  }
+}
 
 const baseStyleSourcesWithoutGnss = (
   sources?: Record<string, SourceSpecification>,
@@ -197,5 +237,17 @@ const baseStyleSourcesWithoutGnss = (
   }
 
   const { ['gnss-mock']: _, ...rest } = sources;
+  return rest;
+};
+
+const baseStyleSourcesWithoutShips = (
+  sources?: Record<string, SourceSpecification>,
+): Record<string, SourceSpecification> | undefined => {
+  if (!sources) {
+    return sources;
+  }
+
+  const { ['fintraffic-ships']: _removedShips, ['plain-point']: _removedPlainPoint, ...rest } =
+    sources;
   return rest;
 };
