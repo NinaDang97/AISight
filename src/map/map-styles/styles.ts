@@ -211,7 +211,7 @@ const gnssPointLayer: CircleLayerSpecification = {
       ['coalesce', ['get', 'gnssAvgCn0'], 0],
       '#ef4444',
       25, '#f59e0b',
-      30, '#22c55e',
+      35, '#22c55e',
     ],
     'circle-stroke-width': 1,
     'circle-stroke-color': '#ffffff',

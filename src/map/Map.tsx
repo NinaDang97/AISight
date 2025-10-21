@@ -28,50 +28,6 @@ const cameraInitStop: CameraStop = {
   zoomLevel: 5,
 };
 
-const NEAREST_FIX_THRESHOLD_METERS = 75;
-
-const EARTH_RADIUS_METERS = 6371000;
-
-const toRadians = (degrees: number): number => (degrees * Math.PI) / 180;
-
-const getDistanceMeters = (a: GeoJSONPosition, b: GeoJSONPosition): number => {
-  const [lon1, lat1] = a;
-  const [lon2, lat2] = b;
-
-  const dLat = toRadians(lat2 - lat1);
-  const dLon = toRadians(lon2 - lon1);
-
-  const lat1Rad = toRadians(lat1);
-  const lat2Rad = toRadians(lat2);
-
-  const sinDLat = Math.sin(dLat / 2);
-  const sinDLon = Math.sin(dLon / 2);
-
-  const aHav =
-    sinDLat * sinDLat + Math.cos(lat1Rad) * Math.cos(lat2Rad) * sinDLon * sinDLon;
-  const c = 2 * Math.atan2(Math.sqrt(aHav), Math.sqrt(1 - aHav));
-
-  return EARTH_RADIUS_METERS * c;
-};
-
-const findNearestFix = (
-  coordinate: GeoJSONPosition,
-  details: GnssFixDetail[],
-): { detail: GnssFixDetail; distanceMeters: number } | null => {
-  let nearest: GnssFixDetail | null = null;
-  let minDistance = Number.POSITIVE_INFINITY;
-
-  for (const detail of details) {
-    const distance = getDistanceMeters(coordinate, detail.coordinate);
-    if (distance < minDistance) {
-      minDistance = distance;
-      nearest = detail;
-    }
-  }
-
-  return nearest ? { detail: nearest, distanceMeters: minDistance } : null;
-};
-
 type SelectedGnss = {
   coordinate: GeoJSONPosition;
   detail: GnssFixDetail;
@@ -84,6 +40,19 @@ const Map = () => {
   const [gnssEnabled, setGnssEnabled] = React.useState(false);
   const [shipLayerEnabled, setShipLayerEnabled] = React.useState(false);
   const [selectedGnss, setSelectedGnss] = React.useState<SelectedGnss | null>(null);
+
+  const adjustZoom = React.useCallback(
+    async (delta: number) => {
+      if (!mapRef.current || !cameraRef.current) return;
+      const currentZoom = await mapRef.current.getZoom();
+      const nextZoom = Math.max(2, Math.min(currentZoom + delta, 18)); // clamp if you like
+      cameraRef.current.setCamera({
+        zoomLevel: nextZoom,
+        animationDuration: 400,
+      });
+    },
+    [],
+  );
 
   const toggleGnss = () => {
     setGnssEnabled((prev) => !prev);
@@ -118,6 +87,14 @@ const Map = () => {
         <Camera ref={cameraRef} />
       </MapView>
 
+      <View style={styles.zoomContainer}>
+        <Pressable style={styles.zoomButton} onPress={() => adjustZoom(1)}>
+          <Text style={styles.zoomLabel}>+</Text>
+        </Pressable>
+        <Pressable style={styles.zoomButton} onPress={() => adjustZoom(-1)}>
+          <Text style={styles.zoomLabel}>−</Text>
+        </Pressable>
+      </View>
       <View style={styles.iconContainer}>
         <Pressable onPress={toggleShips} style={styles.iconButton}>
           <Image source={Vessel} style={styles.icon} resizeMode="contain" />
@@ -136,10 +113,9 @@ export default Map;
 const styles = StyleSheet.create({
   iconContainer: {
     position: 'absolute',
-    top: 12,
-    right: 12,
+    top: 10,
+    right: 10,
     flexDirection: 'column',
-    gap: 12,
   },
   iconButton: {
     borderRadius: 24,
@@ -149,36 +125,22 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
   },
-  popupContainer: {
-    backgroundColor: 'rgba(15, 23, 42, 0.92)',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+  zoomContainer: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
     borderRadius: 8,
-    maxWidth: 260,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
   },
-  popupTitle: {
-    color: '#f8fafc',
-    fontWeight: '600',
-    marginBottom: 2,
+  zoomButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
   },
-  popupSubtitle: {
-    color: '#94a3b8',
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  popupRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  popupLabel: {
-    color: '#cbd5f5',
-    fontSize: 12,
-    marginRight: 8,
-  },
-  popupValue: {
+  zoomLabel: {
     color: '#e2e8f0',
-    fontSize: 12,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: 18,
+    fontWeight: '600',
+  }
 });
