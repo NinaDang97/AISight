@@ -23,6 +23,7 @@ export const TAB_ROUTES = {
   MAP_TAB: 'MapTab',
   PROFILE_TAB: 'ProfileTab',
   SETTINGS_TAB: 'SettingsTab',
+  GNSS_TAB: 'GnssTab',
 };
 
 // Home stack routes
@@ -43,4 +44,9 @@ export const PROFILE_ROUTES = {
 // Settings stack routes
 export const SETTINGS_ROUTES = {
   SETTINGS: 'Settings',
+};
+
+// GNSS stack routes
+export const GNSS_ROUTES = {
+  GNSS: 'Gnss',
 };

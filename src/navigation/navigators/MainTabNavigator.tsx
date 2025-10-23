@@ -8,6 +8,8 @@ import { HomeStackNavigator } from './HomeStackNavigator';
 import { MapStackNavigator } from './MapStackNavigator';
 import { ProfileStackNavigator } from './ProfileStackNavigator';
 import { SettingsStackNavigator } from './SettingsStackNavigator';
+import { GnssStackNavigator } from './GnssStackNavigator';
+
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -90,6 +92,20 @@ export const MainTabNavigator: React.FC = () => {
           tabBarIcon: ({ focused, color, size }) => (
             <Icon
               name={focused ? 'map' : 'map-outline'}
+              color={color}
+              size={size}
+            />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name={Routes.Tabs.GNSS}
+        component={GnssStackNavigator}
+        options={{
+          tabBarLabel: 'GNSS',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Icon
+              name={focused ? 'navigate' : 'navigate-outline'} // Ionicons
               color={color}
               size={size}
             />

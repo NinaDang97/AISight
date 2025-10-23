@@ -22,6 +22,7 @@ export const Routes = {
     MAP: 'MapTab',
     PROFILE: 'ProfileTab',
     SETTINGS: 'SettingsTab',
+    GNSS: 'GnssTab',
   },
 
   // Home stack routes
@@ -43,6 +44,12 @@ export const Routes = {
   Settings: {
     SETTINGS: 'Settings',
   },
+
+  // GNSS stack routes
+  Gnss: {
+      GNSS: 'Gnss',
+  },
+
 } as const;
 
 // Create types from the route name constants
@@ -77,11 +84,16 @@ export type SettingsStackParamList = {
   [Routes.Settings.SETTINGS]: undefined;
 };
 
+export type GnssStackParamList = {
+  [Routes.Gnss.GNSS]: undefined;
+};
+
 export type MainTabParamList = {
   [Routes.Tabs.HOME]: NavigatorScreenParams<HomeStackParamList>;
   [Routes.Tabs.MAP]: NavigatorScreenParams<MapStackParamList>;
   [Routes.Tabs.PROFILE]: NavigatorScreenParams<ProfileStackParamList>;
   [Routes.Tabs.SETTINGS]: NavigatorScreenParams<SettingsStackParamList>;
+  [Routes.Tabs.GNSS]: NavigatorScreenParams<GnssStackParamList>;
 };
 
 export type RootStackParamList = {
