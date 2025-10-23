@@ -74,3 +74,10 @@ package-lock.json
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Environment variables
+.env
+.env.development
+.env.production
+# Keep the example file
+!.env.example
