@@ -5,6 +5,10 @@
   "scripts": {
     "android": "react-native run-android",
     "ios": "react-native run-ios",
+    "android:dev": "ENVFILE=.env.development react-native run-android",
+    "ios:dev": "ENVFILE=.env.development react-native run-ios",
+    "android:prod": "ENVFILE=.env.production react-native run-android",
+    "ios:prod": "ENVFILE=.env.production react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest"
@@ -40,6 +44,7 @@
     "eslint": "^8.19.0",
     "jest": "^29.6.3",
     "prettier": "2.8.8",
+    "react-native-dotenv": "^3.4.11",
     "react-test-renderer": "18.3.1",
     "typescript": "5.0.4"
   },

@@ -1,8 +1,11 @@
-// Hardcoded MapTiler API key for development
-const MAPTILER_API_KEY = 'kzrINMR6M7Z6c9QO8rw6';
+// // Hardcoded MapTiler API key for development
+// const MAPTILER_API_KEY = 'kzrINMR6M7Z6c9QO8rw6';
 
-// for testing
-// const MAPTILER_API_KEY = '';
+// // for testing
+// // const MAPTILER_API_KEY = '';
+
+import { getMapTilerApiKey } from '../../config/environment';
+const MAPTILER_API_KEY = getMapTilerApiKey();
 
 import {
   CircleLayerSpecification,
@@ -23,13 +26,14 @@ import * as basicMapStyle from '../map-styles/maptiler-basic-gl-style.json';
 export const defaultStyle: StyleSpecification = defaultMapStyle as StyleSpecification;
 
 // ===== MapTiler Integration =====
-
 /**
  * Determines if MapTiler should be used based on API key availability
  * @returns true if a valid API key is available
  */
 export const shouldUseMapTiler = (): boolean => {
-  return !!MAPTILER_API_KEY && MAPTILER_API_KEY.length > 0;
+  const isValid = !!MAPTILER_API_KEY && MAPTILER_API_KEY.length > 0;
+  console.log('Using MapTiler:', isValid ? 'YES' : 'NO');
+  return isValid;
 };
 
 /**
@@ -45,9 +49,7 @@ export const getMapTilerStyle = (): StyleSpecification => {
 
   try {
     // Create a deep copy of the basicMapStyle
-    const mapTilerStyle = (typeof structuredClone !== 'undefined' 
-      ? structuredClone(basicMapStyle) 
-      : JSON.parse(JSON.stringify(basicMapStyle))) as StyleSpecification;
+    const mapTilerStyle = JSON.parse(JSON.stringify(basicMapStyle)) as StyleSpecification;
     
     // Replace the placeholder in sources URL
     if (mapTilerStyle.sources?.openmaptiles) {
