@@ -11,12 +11,7 @@ import {
   UserLocationRef,
 } from '@maplibre/maplibre-react-native';
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
-import {
-  addPointLayer,
-  getAppropriateMapStyle,
-  updateShipData,
-  updateShipSource,
-} from './map-styles/styles';
+import { addPointLayer, getAppropriateMapStyle, updateShipData } from './map-styles/styles';
 import { fetchVesselsWithMetadata, makeAisApiUrl, VesselFC } from './map-utils';
 
 const cameraInitStop: CameraStop = {
@@ -52,25 +47,26 @@ const Map = () => {
 
   return (
     <View style={styles.container}>
-      <MapView style={styles.map} mapStyle={mapStyle} attributionEnabled={false}>
+      <MapView ref={mapRef} style={styles.map} mapStyle={mapStyle} attributionEnabled={false}>
         <Camera ref={cameraRef} defaultSettings={cameraInitStop} />
         <UserLocation ref={userLocationRef} renderMode="native" androidRenderMode="compass" />
       </MapView>
-      <View style={styles.buttonContainer}></View>
-      <Button title="Reset" onPress={resetCamera}></Button>
-      <Button title="Add point layers" onPress={addPoints}></Button>
-      <Button title="Update vessels" onPress={updateVesselData} />
-      <Button
-        title="Jump to user location"
-        onPress={async () =>
-          cameraRef.current?.setCamera({
-            centerCoordinate: await LocationManager.getLastKnownLocation().then(location =>
-              location ? [location.coords.longitude, location.coords.latitude] : undefined,
-            ),
-            zoomLevel: 7,
-          })
-        }
-      ></Button>
+      <View style={styles.buttonContainer}>
+        <Button title="Reset" onPress={resetCamera}></Button>
+        <Button title="Point Layer" onPress={addPoints}></Button>
+        <Button title="Update vessels" onPress={updateVesselData} />
+        <Button
+          title="Jmp2Usr"
+          onPress={async () =>
+            cameraRef.current?.setCamera({
+              centerCoordinate: await LocationManager.getLastKnownLocation().then(location =>
+                location ? [location.coords.longitude, location.coords.latitude] : undefined,
+              ),
+              zoomLevel: 10,
+            })
+          }
+        ></Button>
+      </View>
     </View>
   );
 };
