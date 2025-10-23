@@ -1,12 +1,23 @@
 import React from 'react';
 import { Button, View, StyleSheet } from 'react-native';
-import { Camera, CameraRef, CameraStop, MapView } from '@maplibre/maplibre-react-native';
+import { Camera, CameraRef, CameraStop, LocationManager, MapView, MapViewRef, UserLocation, UserLocationRef } from '@maplibre/maplibre-react-native';
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
-import { addPointLayer, getAppropriateMapStyle,  } from './map-styles/styles';
+import { addPointLayer, getAppropriateMapStyle, updateShipData, updateShipSource } from './map-styles/styles';
+import { fetchVesselsWithMetadata, makeAisApiUrl, VesselFC } from './map-utils';
+
+interface MapState {
+  currentCenter: any;
+  visibleBounds: any;
+}
 
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
   zoomLevel: 10,
+};
+
+const initMapState: MapState = {
+  currentCenter: [19.93481, 60.09726],
+  visibleBounds: { northEast: [22.23191213142115, 60.43518651667806] },
 };
 
 const Map = () => {
@@ -16,8 +27,19 @@ const Map = () => {
   const mapRef = React.useRef<MapViewRef>(null);
   const userLocationRef = React.useRef<UserLocationRef>(null);
 
-  const addPoints = () => {
-    setMapStyle(prevStyle => addPointLayer(prevStyle));
+  const addPoints = () => setMapStyle(addPointLayer(mapStyle));
+
+  const updateVesselData = async () => {
+    const currentCenter = await mapRef.current?.getCenter();
+    const visibleBounds = await mapRef.current?.getVisibleBounds();
+
+    if (!currentCenter) throw new Error('Error getting map center');
+    if (!visibleBounds) throw new Error('Error getting map bounds');
+
+    const url = makeAisApiUrl(currentCenter, visibleBounds);
+    const vessels: VesselFC = await fetchVesselsWithMetadata(url);
+
+    setMapStyle(updateShipData(mapStyle, vessels));
   };
 
   const resetCamera = () => {
@@ -53,7 +75,8 @@ const Map = () => {
       </MapView>
       <View style={styles.buttonContainer}></View>
       <Button title="Reset" onPress={resetCamera}></Button>
-      <Button title="Show" onPress={addPoints}></Button>
+      <Button title="Add point layers" onPress={addPoints}></Button>
+      <Button title="Update vessels" onPress={updateVesselData} />
       <Button
         title="Jump to user location"
         onPress={async () =>

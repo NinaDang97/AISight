@@ -17,6 +17,7 @@ import {
 import type { FeatureCollection, LineString, Point } from 'geojson';
 import * as defaultMapStyle from '../map-styles/maplibre-default-style.json';
 import * as basicMapStyle from '../map-styles/maptiler-basic-gl-style.json';
+import { VesselFC } from '../map-utils';
 
 // ===== Base Map Styles =====
 
@@ -97,7 +98,6 @@ export const addPointLayer = (prevStyle: StyleSpecification): StyleSpecification
     ...prevStyle,
     sources: {
       ...prevStyle.sources,
-      'fintraffic-ships': herwoodCenteredShipSource,
       'plain-point': plainPointSource,
     },
     layers: [...prevStyle.layers, shipLayer, plainPointLayer, shipTextLayer],
@@ -105,6 +105,56 @@ export const addPointLayer = (prevStyle: StyleSpecification): StyleSpecification
 };
 
 // ===== Source Definitions =====
+/**
+ * Method to get stuff from Digitraffic ais source
+ * @param prevStyle
+ * @param location
+ * @param radius
+ * @returns
+ */
+
+// geojson source given the json as a parameter
+export const updateShipData = (
+  prevStyle: StyleSpecification,
+  vessels: VesselFC,
+): StyleSpecification => {
+  return {
+    ...prevStyle,
+    sources: {
+      ...prevStyle.sources,
+      'fintraffic-ships': {
+        type: 'geojson',
+        data: vessels,
+      },
+    },
+  };
+};
+
+export const updateShipSource = (
+  prevStyle: StyleSpecification,
+  currentCenter: GeoJSON.Position,
+  visibleBounds: [GeoJSON.Position, GeoJSON.Position],
+): StyleSpecification => {
+  const topleft: GeoJSON.Position = visibleBounds[0];
+  const radius =
+    Math.sqrt(
+      Math.pow(topleft[0] - currentCenter[0], 2) + Math.pow(topleft[1] - currentCenter[1], 2),
+    ) * 111; // rough conversion to kilometers
+  const sourceString = `https://meri.digitraffic.fi/api/ais/v1/locations?radius=${radius}&latitude=${currentCenter[0]}&longitude=${currentCenter[1]}`;
+  if (prevStyle.sources && prevStyle.sources['fintraffic-ships']) {
+    return {
+      ...prevStyle,
+      sources: {
+        ...prevStyle.sources,
+        'fintraffic-ships': {
+          type: 'geojson',
+          data: sourceString,
+        },
+      },
+    };
+  }
+  return prevStyle;
+};
 
 const herwoodCenteredShipSource: GeoJSONSourceSpecification = {
   type: 'geojson',
