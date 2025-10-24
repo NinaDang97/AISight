@@ -1,14 +1,16 @@
 import { MAPTILER_API_KEY, API_URL, ENV, DEBUG, LOG_LEVEL, MAPLIBRE_STYLE_URL } from '@env';
+import { logger } from '../utils/logger';
 
-// Add this testing code
-console.log('==== ENVIRONMENT VARIABLES TEST ====');
-console.log('MAPTILER_API_KEY:', MAPTILER_API_KEY ? `${MAPTILER_API_KEY.substring(0, 4)}...` : 'undefined');
-console.log('API_URL:', API_URL || 'undefined');
-console.log('ENV:', ENV || 'undefined');
-console.log('DEBUG:', DEBUG || 'undefined');
-console.log('LOG_LEVEL:', LOG_LEVEL || 'undefined');
-console.log('MAPLIBRE_STYLE_URL:', MAPLIBRE_STYLE_URL || 'undefined');
-console.log('==== END TEST ====');
+// Log environment configuration (only in development)
+if (__DEV__) {
+  logger.debug('Environment configuration loaded');
+  logger.debug('API_URL:', API_URL || 'undefined');
+  logger.debug('ENV:', ENV || 'undefined');
+  logger.debug('DEBUG:', DEBUG || 'undefined');
+  logger.debug('LOG_LEVEL:', LOG_LEVEL || 'undefined');
+  logger.debug('MAPLIBRE_STYLE_URL:', MAPLIBRE_STYLE_URL || 'undefined');
+  logger.debug('MAPTILER_API_KEY:', MAPTILER_API_KEY ? 'loaded' : 'missing');
+}
 
 // import { Alert } from 'react-native';
 // // Alert for more visible testing

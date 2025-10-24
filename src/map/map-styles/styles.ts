@@ -1,12 +1,5 @@
-// // Hardcoded MapTiler API key for development
-// const MAPTILER_API_KEY = 'kzrINMR6M7Z6c9QO8rw6';
-
-// // for testing
-// // const MAPTILER_API_KEY = '';
-
 import { getMapTilerApiKey } from '../../config/environment';
-const MAPTILER_API_KEY = getMapTilerApiKey();
-
+import { logger } from '../../utils/logger';
 import {
   CircleLayerSpecification,
   GeoJSONSourceSpecification,
@@ -18,6 +11,8 @@ import type { FeatureCollection, LineString, Point } from 'geojson';
 import * as defaultMapStyle from '../map-styles/maplibre-default-style.json';
 import * as basicMapStyle from '../map-styles/maptiler-basic-gl-style.json';
 
+const MAPTILER_API_KEY = getMapTilerApiKey();
+
 // ===== Base Map Styles =====
 
 /**
@@ -26,13 +21,14 @@ import * as basicMapStyle from '../map-styles/maptiler-basic-gl-style.json';
 export const defaultStyle: StyleSpecification = defaultMapStyle as StyleSpecification;
 
 // ===== MapTiler Integration =====
+
 /**
  * Determines if MapTiler should be used based on API key availability
  * @returns true if a valid API key is available
  */
 export const shouldUseMapTiler = (): boolean => {
   const isValid = !!MAPTILER_API_KEY && MAPTILER_API_KEY.length > 0;
-  console.log('Using MapTiler:', isValid ? 'YES' : 'NO');
+  logger.debug('Using MapTiler:', isValid ? 'YES' : 'NO');
   return isValid;
 };
 
@@ -43,14 +39,14 @@ export const shouldUseMapTiler = (): boolean => {
 export const getMapTilerStyle = (): StyleSpecification => {
   // If no API key is available, return the default style
   if (!shouldUseMapTiler()) {
-    console.warn('No MapTiler API key found in environment variables, using default MapLibre style');
+    logger.warn('No MapTiler API key found, using default MapLibre style');
     return defaultStyle;
   }
 
   try {
     // Create a deep copy of the basicMapStyle
     const mapTilerStyle = JSON.parse(JSON.stringify(basicMapStyle)) as StyleSpecification;
-    
+
     // Replace the placeholder in sources URL
     if (mapTilerStyle.sources?.openmaptiles) {
       const source = mapTilerStyle.sources.openmaptiles;
@@ -58,15 +54,15 @@ export const getMapTilerStyle = (): StyleSpecification => {
         (source as any).url = source.url.replace('{key}', MAPTILER_API_KEY || '');
       }
     }
-    
+
     // Replace the placeholder in glyphs URL
     if (typeof mapTilerStyle.glyphs === 'string') {
       mapTilerStyle.glyphs = mapTilerStyle.glyphs.replace('{key}', MAPTILER_API_KEY || '');
     }
-    
+
     return mapTilerStyle;
   } catch (error) {
-    console.error('Failed to create MapTiler style:', error);
+    logger.error('Failed to create MapTiler style:', error);
     return defaultStyle;
   }
 };

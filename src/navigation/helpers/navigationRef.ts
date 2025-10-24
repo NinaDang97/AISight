@@ -8,6 +8,7 @@
  */
 import { createNavigationContainerRef, StackActions } from '@react-navigation/native';
 import { RootStackParamList } from '../routes/index';
+import { logger } from '../../utils/logger';
 
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
@@ -24,7 +25,7 @@ export function navigate<RouteName extends keyof RootStackParamList>(
         params,
       } as any);
   } else {
-    console.warn('Navigation attempted before navigator was ready');
+    logger.warn('Navigation attempted before navigator was ready');
   }
 }
 
