@@ -17,6 +17,7 @@ import {
 import type { FeatureCollection, LineString, Point } from 'geojson';
 import * as defaultMapStyle from '../map-styles/maplibre-default-style.json';
 import * as basicMapStyle from '../map-styles/maptiler-basic-gl-style.json';
+import { VesselFC } from '../map-utils';
 
 // ===== Base Map Styles =====
 
@@ -43,14 +44,16 @@ export const shouldUseMapTiler = (): boolean => {
 export const getMapTilerStyle = (): StyleSpecification => {
   // If no API key is available, return the default style
   if (!shouldUseMapTiler()) {
-    console.warn('No MapTiler API key found in environment variables, using default MapLibre style');
+    console.warn(
+      'No MapTiler API key found in environment variables, using default MapLibre style',
+    );
     return defaultStyle;
   }
 
   try {
     // Create a deep copy of the basicMapStyle
     const mapTilerStyle = JSON.parse(JSON.stringify(basicMapStyle)) as StyleSpecification;
-    
+
     // Replace the placeholder in sources URL
     if (mapTilerStyle.sources?.openmaptiles) {
       const source = mapTilerStyle.sources.openmaptiles;
@@ -58,12 +61,12 @@ export const getMapTilerStyle = (): StyleSpecification => {
         (source as any).url = source.url.replace('{key}', MAPTILER_API_KEY || '');
       }
     }
-    
+
     // Replace the placeholder in glyphs URL
     if (typeof mapTilerStyle.glyphs === 'string') {
       mapTilerStyle.glyphs = mapTilerStyle.glyphs.replace('{key}', MAPTILER_API_KEY || '');
     }
-    
+
     return mapTilerStyle;
   } catch (error) {
     console.error('Failed to create MapTiler style:', error);
@@ -81,23 +84,12 @@ export const getAppropriateMapStyle = (): StyleSpecification => {
 
 // ===== Layer Addition Functions =====
 
-export const addHerwood2CapeLayer = (prevStyle: StyleSpecification): StyleSpecification => {
+export const addPointLayers = (prevStyle: StyleSpecification): StyleSpecification => {
   return {
     ...prevStyle,
     sources: {
+      // this source is here for testing purposes TODO: Remove when not used anymore
       ...prevStyle.sources,
-      'herwood-to-capetown': herwood2CapetownSource,
-    },
-    layers: [...prevStyle.layers, herwoodLayer],
-  };
-};
-
-export const addPointLayer = (prevStyle: StyleSpecification): StyleSpecification => {
-  return {
-    ...prevStyle,
-    sources: {
-      ...prevStyle.sources,
-      'fintraffic-ships': herwoodCenteredShipSource,
       'plain-point': plainPointSource,
     },
     layers: [...prevStyle.layers, shipLayer, plainPointLayer, shipTextLayer],
@@ -105,10 +97,29 @@ export const addPointLayer = (prevStyle: StyleSpecification): StyleSpecification
 };
 
 // ===== Source Definitions =====
+/**
+ * Method to get stuff from Digitraffic ais source
+ * @param prevStyle
+ * @param location
+ * @param radius
+ * @returns
+ */
 
-const herwoodCenteredShipSource: GeoJSONSourceSpecification = {
-  type: 'geojson',
-  data: 'https://meri.digitraffic.fi/api/ais/v1/locations?radius=500&latitude=61.4481&longitude=23.8521',
+// source is just plain json
+export const updateShipData = (
+  prevStyle: StyleSpecification,
+  vessels: VesselFC,
+): StyleSpecification => {
+  return {
+    ...prevStyle,
+    sources: {
+      ...prevStyle.sources,
+      'fintraffic-ships': {
+        type: 'geojson',
+        data: vessels,
+      },
+    },
+  };
 };
 
 const plainPointSource: GeoJSONSourceSpecification = {
@@ -126,28 +137,6 @@ const plainPointSource: GeoJSONSourceSpecification = {
       },
     ],
   } as FeatureCollection<Point>,
-};
-
-const herwoodToCapetown: FeatureCollection<LineString> = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      geometry: {
-        type: 'LineString',
-        coordinates: [
-          [23.8521, 61.4481],
-          [18.4233, -33.918861],
-        ],
-      },
-      properties: { name: 'Hervanta - Cape Town' },
-    },
-  ],
-};
-
-const herwood2CapetownSource: GeoJSONSourceSpecification = {
-  type: 'geojson',
-  data: herwoodToCapetown,
 };
 
 // ===== Layer Definitions =====
