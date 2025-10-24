@@ -32,6 +32,16 @@ The app uses MapTiler for maps, which requires an API key:
 
 ### 3. Run the App
 
+You can run the app for development normally with the following commands. It is recommended (and maybe required) to clear npm cache before running the app with `.env` changes for the first time.
+
+```bash
+npm start -- --reset-cache
+
+npm run android
+# or
+npm run ios
+```
+
 We've created special npm scripts that automatically use the right environment files:
 
 ```bash
@@ -48,6 +58,22 @@ The app will start with your personal API key and development settings.
 - **react-native-dotenv** loads variables from environment files
 - The `ENVFILE` parameter tells it which file to use
 - Our config module ([src/config/environment.ts](cci:7://file:///Users/shaikat/Desktop/AISight/src/config/environment.ts:0:0-0:0)) provides access to these variables
+
+## Troubleshooting
+
+For running the app on Mac you can try
+
+```bash
+rm -rf $TMPDIR/metro-*
+watchman watch-del-all
+npm start -- --reset-cache
+```
+
+For running in Windows with Powershell you require a different commands. The ones included in `package.json` only work for MacOS and Linux. With the following line you should be able to run the app. Just change 'production' to e.g. development to run different `.env` files.  
+
+```powershell
+$env:ENVFILE=".env.production"; npx react-native run-android
+```
 
 ## Common Questions
 
