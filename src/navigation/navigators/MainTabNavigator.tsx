@@ -1,15 +1,38 @@
 import React from 'react';
+import { Image, StyleSheet, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import Icon from 'react-native-vector-icons/Ionicons';
 import { Routes, MainTabParamList } from '../routes';
 import { colors } from '../../styles/colors';
-import { typography } from '../../styles/typography';
-import { HomeStackNavigator } from './HomeStackNavigator';
 import { MapStackNavigator } from './MapStackNavigator';
-import { ProfileStackNavigator } from './ProfileStackNavigator';
+import { GnssStackNavigator } from './GnssStackNavigator';
+import { AnomalyStackNavigator } from './AnomalyStackNavigator';
+import { ReportStackNavigator } from './ReportStackNavigator';
 import { SettingsStackNavigator } from './SettingsStackNavigator';
 
+// Import custom tab bar icons
+const icons = {
+  map: require('../../../assets/images/icons/map-icon.png'),
+  gnss: require('../../../assets/images/icons/gnss-icon.png'),
+  anomaly: require('../../../assets/images/icons/anomaly-icon.png'),
+  report: require('../../../assets/images/icons/report-icon.png'),
+  settings: require('../../../assets/images/icons/settings-icon.png'),
+};
+
 const Tab = createBottomTabNavigator<MainTabParamList>();
+
+// Helper component to render tab icon with ellipse background when focused
+const TabIcon: React.FC<{ source: any; focused: boolean; size: number }> = ({ source, focused, size }) => (
+  <View style={[styles.iconContainer, focused && styles.iconContainerFocused]}>
+    <Image
+      source={source}
+      style={[
+        styles.tabIcon,
+        { width: size + 4, height: size + 4 }
+      ]}
+      resizeMode="contain"
+    />
+  </View>
+);
 
 /**
  * Main bottom tab navigator that orchestrates all four stack navigators (Home, Map, Profile, Settings).
@@ -49,11 +72,12 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 export const MainTabNavigator: React.FC = () => {
   return (
     <Tab.Navigator
-      initialRouteName={Routes.Tabs.HOME}
+      initialRouteName={Routes.Tabs.MAP}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
+        tabBarShowLabel: false, // Hide all tab labels
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
@@ -62,51 +86,41 @@ export const MainTabNavigator: React.FC = () => {
           paddingTop: 8,
           height: 60,
         },
-        tabBarLabelStyle: {
-          fontSize: typography.caption.fontSize,
-          fontWeight: '500',
-        },
       }}
     >
-      <Tab.Screen
-        name={Routes.Tabs.HOME}
-        component={HomeStackNavigator}
-        options={{
-          tabBarLabel: 'Home',
-          tabBarIcon: ({ focused, color, size }) => (
-            <Icon
-              name={focused ? 'home' : 'home-outline'}
-              color={color}
-              size={size}
-            />
-          ),
-        }}
-      />
       <Tab.Screen
         name={Routes.Tabs.MAP}
         component={MapStackNavigator}
         options={{
-          tabBarLabel: 'Map',
-          tabBarIcon: ({ focused, color, size }) => (
-            <Icon
-              name={focused ? 'map' : 'map-outline'}
-              color={color}
-              size={size}
-            />
+          tabBarIcon: ({ focused, size }) => (
+            <TabIcon source={icons.map} focused={focused} size={size} />
           ),
         }}
       />
       <Tab.Screen
-        name={Routes.Tabs.PROFILE}
-        component={ProfileStackNavigator}
+        name={Routes.Tabs.GNSS}
+        component={GnssStackNavigator}
         options={{
-          tabBarLabel: 'Profile',
-          tabBarIcon: ({ focused, color, size }) => (
-            <Icon
-              name={focused ? 'person' : 'person-outline'}
-              color={color}
-              size={size}
-            />
+          tabBarIcon: ({ focused, size }) => (
+            <TabIcon source={icons.gnss} focused={focused} size={size} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name={Routes.Tabs.ANOMALY}
+        component={AnomalyStackNavigator}
+        options={{
+          tabBarIcon: ({ focused, size }) => (
+            <TabIcon source={icons.anomaly} focused={focused} size={size} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name={Routes.Tabs.REPORT}
+        component={ReportStackNavigator}
+        options={{
+          tabBarIcon: ({ focused, size }) => (
+            <TabIcon source={icons.report} focused={focused} size={size} />
           ),
         }}
       />
@@ -114,16 +128,27 @@ export const MainTabNavigator: React.FC = () => {
         name={Routes.Tabs.SETTINGS}
         component={SettingsStackNavigator}
         options={{
-          tabBarLabel: 'Settings',
-          tabBarIcon: ({ focused, color, size }) => (
-            <Icon
-              name={focused ? 'settings' : 'settings-outline'}
-              color={color}
-              size={size}
-            />
+          tabBarIcon: ({ focused, size }) => (
+            <TabIcon source={icons.settings} focused={focused} size={size} />
           ),
         }}
       />
     </Tab.Navigator>
   );
 };
+
+const styles = StyleSheet.create({
+  iconContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 48,
+    height: 48,
+    borderRadius: 24, // Makes it circular (ellipse)
+  },
+  iconContainerFocused: {
+    backgroundColor: '#23A6DA', // Ellipse background color when selected
+  },
+  tabIcon: {
+    // Icon will be sized dynamically
+  },
+});

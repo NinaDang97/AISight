@@ -3,15 +3,15 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaWrapper } from '../../components/common/SafeAreaWrapper';
 import { colors, typography, spacing } from '../../styles';
 
-export const HomeScreen = () => {
+export const AnomalyScreen = () => {
   return (
     <SafeAreaWrapper backgroundColor={colors.background} barStyle="dark-content">
       <ScrollView style={styles.container}>
         {/* Header Section */}
         <View style={styles.header}>
-          <Text style={typography.heading2}>Home</Text>
+          <Text style={typography.heading2}>Anomaly Detection</Text>
           <Text style={[typography.bodyLarge, { color: colors.textSecondary }]}>
-            Welcome to AISight
+            Monitor navigation anomalies
           </Text>
         </View>
 
