@@ -18,15 +18,11 @@ export const Routes = {
 
   // Main tab routes
   Tabs: {
-    HOME: 'HomeTab',
     MAP: 'MapTab',
-    PROFILE: 'ProfileTab',
+    GNSS: 'GnssTab',
+    ANOMALY: 'AnomalyTab',
+    REPORT: 'ReportTab',
     SETTINGS: 'SettingsTab',
-  },
-
-  // Home stack routes
-  Home: {
-    HOME: 'Home',
   },
 
   // Map stack routes
@@ -34,9 +30,19 @@ export const Routes = {
     MAP: 'Map',
   },
 
-  // Profile stack routes
-  Profile: {
-    PROFILE: 'Profile',
+  // GNSS stack routes
+  Gnss: {
+    GNSS: 'Gnss',
+  },
+
+  // Anomaly stack routes
+  Anomaly: {
+    ANOMALY: 'Anomaly',
+  },
+
+  // Report stack routes
+  Report: {
+    REPORT: 'Report',
   },
 
   // Settings stack routes
@@ -48,9 +54,10 @@ export const Routes = {
 // Create types from the route name constants
 export type OnboardingRoutes = typeof Routes.Onboarding[keyof typeof Routes.Onboarding];
 export type TabRoutes = typeof Routes.Tabs[keyof typeof Routes.Tabs];
-export type HomeRoutes = typeof Routes.Home[keyof typeof Routes.Home];
 export type MapRoutes = typeof Routes.Map[keyof typeof Routes.Map];
-export type ProfileRoutes = typeof Routes.Profile[keyof typeof Routes.Profile];
+export type GnssRoutes = typeof Routes.Gnss[keyof typeof Routes.Gnss];
+export type AnomalyRoutes = typeof Routes.Anomaly[keyof typeof Routes.Anomaly];
+export type ReportRoutes = typeof Routes.Report[keyof typeof Routes.Report];
 export type SettingsRoutes = typeof Routes.Settings[keyof typeof Routes.Settings];
 export type RootRoutes = typeof Routes.Root[keyof typeof Routes.Root];
 
@@ -61,16 +68,20 @@ export type OnboardingStackParamList = {
   [Routes.Onboarding.TUTORIAL]: undefined;
 };
 
-export type HomeStackParamList = {
-  [Routes.Home.HOME]: undefined;
-};
-
 export type MapStackParamList = {
   [Routes.Map.MAP]: undefined;
 };
 
-export type ProfileStackParamList = {
-  [Routes.Profile.PROFILE]: undefined;
+export type GnssStackParamList = {
+  [Routes.Gnss.GNSS]: undefined;
+};
+
+export type AnomalyStackParamList = {
+  [Routes.Anomaly.ANOMALY]: undefined;
+};
+
+export type ReportStackParamList = {
+  [Routes.Report.REPORT]: undefined;
 };
 
 export type SettingsStackParamList = {
@@ -78,9 +89,10 @@ export type SettingsStackParamList = {
 };
 
 export type MainTabParamList = {
-  [Routes.Tabs.HOME]: NavigatorScreenParams<HomeStackParamList>;
   [Routes.Tabs.MAP]: NavigatorScreenParams<MapStackParamList>;
-  [Routes.Tabs.PROFILE]: NavigatorScreenParams<ProfileStackParamList>;
+  [Routes.Tabs.GNSS]: NavigatorScreenParams<GnssStackParamList>;
+  [Routes.Tabs.ANOMALY]: NavigatorScreenParams<AnomalyStackParamList>;
+  [Routes.Tabs.REPORT]: NavigatorScreenParams<ReportStackParamList>;
   [Routes.Tabs.SETTINGS]: NavigatorScreenParams<SettingsStackParamList>;
 };
 
