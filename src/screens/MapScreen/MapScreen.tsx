@@ -20,7 +20,7 @@ const VesselAISDetails: React.FC = () => {
     - clean design
   */
 
-  const [modalVisible, setModalVisible] = React.useState<boolean>(false);
+  const [modalVisible, setModalVisible] = React.useState<boolean>(true);
 
   return (
     <Modal visible={modalVisible} transparent={true}>
@@ -108,7 +108,7 @@ export const MapScreen: React.FC = () => {
     <SafeAreaWrapper backgroundColor={colors.background} barStyle="dark-content">
       <View style={styles.container}>
         <Map />
-        <VesselInfoCard />
+        {/*<VesselInfoCard />*/}
         <VesselAISDetails />
 
         {/*<MapControls />*/}
