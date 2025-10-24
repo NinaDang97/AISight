@@ -11,7 +11,7 @@ import {
   UserLocationRef,
 } from '@maplibre/maplibre-react-native';
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
-import { addPointLayer, getAppropriateMapStyle, updateShipData } from './map-styles/styles';
+import { addPointLayers, getAppropriateMapStyle, updateShipData } from './map-styles/styles';
 import { fetchVesselsWithMetadata, makeAisApiUrl, VesselFC } from './map-utils';
 
 const cameraInitStop: CameraStop = {
@@ -26,7 +26,7 @@ const Map = () => {
   const mapRef = React.useRef<MapViewRef>(null);
   const userLocationRef = React.useRef<UserLocationRef>(null);
 
-  const addPoints = () => setMapStyle(addPointLayer(mapStyle));
+  const addPoints = () => setMapStyle(addPointLayers(mapStyle));
 
   const updateVesselData = async () => {
     const currentCenter = await mapRef.current?.getCenter();
