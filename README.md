@@ -7,14 +7,19 @@ Repository for TUNI course COMP.SE.610/620
 > Running scripts in elevated powershell is vital!
 
 1. Setup your environment according to [this guide](https://reactnative.dev/docs/set-up-your-environment)
-2. Create AVD (Android Virual Device) with Android 35 SDK and bring it up and running.
-3. Run the development servers. The project was initialized according to [this guide](https://reactnative.dev/docs/getting-started-without-a-framework)
+2. **⚠️ IMPORTANT: Set up environment variables** - See [SECURITY_SETUP.md](SECURITY_SETUP.md) for instructions
+   ```sh
+   cp .env.example .env
+   # Edit .env and add your MapTiler API key
+   ```
+3. Create AVD (Android Virual Device) with Android 35 SDK and bring it up and running.
+4. Run the development servers. The project was initialized according to [this guide](https://reactnative.dev/docs/getting-started-without-a-framework)
 ``` sh
 npm install
 npm start # this will start Metro (javascript build tool), suggested to be running in its own terminal
 npm run android # this should open an android emulator and after a while it should install the app
 ```
-4. Try doing some changes in the codebase and see if the changes are reflected
+5. Try doing some changes in the codebase and see if the changes are reflected
 
 ### Code formatting
 The project supports Prettier for code formatting so following should make your life a little bit easier
