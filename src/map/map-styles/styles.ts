@@ -1,20 +1,83 @@
+import { getMapTilerApiKey } from '../../config/environment';
+import { logger } from '../../utils/logger';
 import {
   CircleLayerSpecification,
   GeoJSONSourceSpecification,
+  LineLayerSpecification,
   SourceSpecification,
   StyleSpecification,
   SymbolLayerSpecification,
-  LineLayerSpecification,
 } from '@maplibre/maplibre-gl-style-spec';
+import type { FeatureCollection, LineString, Point } from 'geojson';
 import * as defaultMapStyle from '../map-styles/maplibre-default-style.json';
 import * as basicMapStyle from '../map-styles/maptiler-basic-gl-style.json';
 import { gnssMockFixes } from '../../logs/native-module/gnss-mock';
 
-// You can replace this with any valid MapLibre style JSON e.g. the basicMapStyle.
-// It however requires you to have the api key from https://docs.maptiler.com/cloud/api/authentication-key/
-// You have to set it to the json. Plan is to have this is .env in the future.
-// Maplibre default style does not require a key.
+const MAPTILER_API_KEY = getMapTilerApiKey();
+
+// ===== Base Map Styles =====
+
+/**
+ * Default MapLibre style that doesn't require an API key
+ */
 export const defaultStyle: StyleSpecification = defaultMapStyle as StyleSpecification;
+
+// ===== MapTiler Integration =====
+
+/**
+ * Determines if MapTiler should be used based on API key availability
+ * @returns true if a valid API key is available
+ */
+export const shouldUseMapTiler = (): boolean => {
+  const isValid = !!MAPTILER_API_KEY && MAPTILER_API_KEY.length > 0;
+  logger.debug('Using MapTiler:', isValid ? 'YES' : 'NO');
+  return isValid;
+};
+
+/**
+ * Creates a MapTiler style with the API key injected
+ * @returns The MapTiler style with API key
+ */
+export const getMapTilerStyle = (): StyleSpecification => {
+  // If no API key is available, return the default style
+  if (!shouldUseMapTiler()) {
+    logger.warn('No MapTiler API key found, using default MapLibre style');
+    return defaultStyle;
+  }
+
+  try {
+    // Create a deep copy of the basicMapStyle
+    const mapTilerStyle = JSON.parse(JSON.stringify(basicMapStyle)) as StyleSpecification;
+
+    // Replace the placeholder in sources URL
+    if (mapTilerStyle.sources?.openmaptiles) {
+      const source = mapTilerStyle.sources.openmaptiles;
+      if ('url' in source && typeof source.url === 'string') {
+        (source as any).url = source.url.replace('{key}', MAPTILER_API_KEY || '');
+      }
+    }
+
+    // Replace the placeholder in glyphs URL
+    if (typeof mapTilerStyle.glyphs === 'string') {
+      mapTilerStyle.glyphs = mapTilerStyle.glyphs.replace('{key}', MAPTILER_API_KEY || '');
+    }
+
+    return mapTilerStyle;
+  } catch (error) {
+    logger.error('Failed to create MapTiler style:', error);
+    return defaultStyle;
+  }
+};
+
+/**
+ * Gets the appropriate map style based on API key availability
+ * @returns The appropriate map style
+ */
+export const getAppropriateMapStyle = (): StyleSpecification => {
+  return shouldUseMapTiler() ? getMapTilerStyle() : defaultStyle;
+};
+
+// ===== Layer Addition Functions =====
 
 export const addHerwood2CapeLayer = (prevStyle: StyleSpecification): StyleSpecification => {
   return {
@@ -90,10 +153,53 @@ export const removeGnssMockLayer = (prevStyle: StyleSpecification): StyleSpecifi
   };
 };
 
+// ===== Source Definitions =====
+
 const herwoodCenteredShipSource: GeoJSONSourceSpecification = {
   type: 'geojson',
   data: 'https://meri.digitraffic.fi/api/ais/v1/locations?radius=500&latitude=61.4481&longitude=23.8521',
 };
+
+const plainPointSource: GeoJSONSourceSpecification = {
+  type: 'geojson',
+  data: {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [19.93481, 60.09726],
+        },
+        properties: { name: 'Mariehamn' },
+      },
+    ],
+  } as FeatureCollection<Point>,
+};
+
+const herwoodToCapetown: FeatureCollection<LineString> = {
+  type: 'FeatureCollection',
+  features: [
+    {
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [23.8521, 61.4481],
+          [18.4233, -33.918861],
+        ],
+      },
+      properties: { name: 'Hervanta - Cape Town' },
+    },
+  ],
+};
+
+const herwood2CapetownSource: GeoJSONSourceSpecification = {
+  type: 'geojson',
+  data: herwoodToCapetown,
+};
+
+// ===== Layer Definitions =====
 
 const shipLayer: CircleLayerSpecification = {
   id: 'ships',
@@ -116,53 +222,16 @@ const shipTextLayer: SymbolLayerSpecification = {
   },
 };
 
-const herwoodToCapetown: GeoJSON = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      geometry: {
-        type: 'LineString',
-        coordinates: [
-          [23.8521, 61.4481],
-          [18.4233, -33.918861],
-        ],
-      },
-      properties: { name: 'Hervanta - Cape Town' },
-    },
-  ],
-};
-
-const herwood2CapetownSource: GeoJSONSourceSpecification = {
-  type: 'geojson',
-  data: herwoodToCapetown,
-};
-
 const herwoodLayer: LineLayerSpecification = {
   id: 'herwood-to-capetown',
   type: 'line',
   source: 'herwood-to-capetown',
   paint: {
-    'line-cap': 'round',
     'line-width': 10,
     'line-color': '#fa0',
   },
-};
-
-const plainPointSource: GeoJSONSourceSpecification = {
-  type: 'geojson',
-  data: {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        geometry: {
-          type: 'Point',
-          coordinates: [19.93481, 60.09726],
-        },
-        properties: { name: 'Mariehamn' },
-      },
-    ],
+  layout: {
+    'line-cap': 'round',
   },
 };
 

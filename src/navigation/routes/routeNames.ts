@@ -19,15 +19,11 @@ export const ONBOARDING_ROUTES = {
 
 // Main tab routes
 export const TAB_ROUTES = {
-  HOME_TAB: 'HomeTab',
   MAP_TAB: 'MapTab',
-  PROFILE_TAB: 'ProfileTab',
+  GNSS_TAB: 'GnssTab',
+  ANOMALY_TAB: 'AnomalyTab',
+  REPORT_TAB: 'ReportTab',
   SETTINGS_TAB: 'SettingsTab',
-};
-
-// Home stack routes
-export const HOME_ROUTES = {
-  HOME: 'Home',
 };
 
 // Map stack routes
@@ -35,9 +31,19 @@ export const MAP_ROUTES = {
   MAP: 'Map',
 };
 
-// Profile stack routes
-export const PROFILE_ROUTES = {
-  PROFILE: 'Profile',
+// GNSS stack routes
+export const GNSS_ROUTES = {
+  GNSS: 'Gnss',
+};
+
+// Anomaly stack routes (formerly Home)
+export const ANOMALY_ROUTES = {
+  ANOMALY: 'Anomaly',
+};
+
+// Report stack routes (formerly Profile)
+export const REPORT_ROUTES = {
+  REPORT: 'Report',
 };
 
 // Settings stack routes

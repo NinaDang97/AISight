@@ -4,18 +4,15 @@ import { SafeAreaWrapper } from '../../components/common/SafeAreaWrapper';
 import { Button } from '../../components/common/Button';
 import { colors, typography, spacing } from '../../styles';
 
-export const ProfileScreen = () => {
+export const ReportScreen = () => {
   return (
     <SafeAreaWrapper backgroundColor={colors.background} barStyle="dark-content">
       <ScrollView style={styles.container}>
-        {/* Profile Header Section */}
+        {/* Report Header Section */}
         <View style={styles.header}>
-          <View style={styles.avatar}>
-            <Text style={typography.heading1}>JD</Text>
-          </View>
-          <Text style={typography.heading3}>John Doe</Text>
+          <Text style={typography.heading2}>Reports</Text>
           <Text style={[typography.body, { color: colors.textSecondary }]}>
-            john.doe@example.com
+            View and generate reports
           </Text>
         </View>
 

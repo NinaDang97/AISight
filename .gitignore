@@ -40,7 +40,7 @@ local.properties
 node_modules/
 npm-debug.log
 yarn-error.log
-package-lock.json
+# Note: package-lock.json should be committed for consistent installs
 
 # fastlane
 #
@@ -74,3 +74,10 @@ package-lock.json
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Environment variables
+.env
+.env.development
+.env.production
+# Keep the example file
+!.env.example

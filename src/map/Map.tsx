@@ -16,7 +16,7 @@ import type {
 import {
   addGnssMockLayer,
   addShipLayer,
-  defaultStyle,
+  getAppropriateMapStyle,
   removeGnssMockLayer,
   removeShipLayer,
 } from './map-styles/styles';
@@ -37,7 +37,8 @@ type SelectedGnss = {
 };
 
 const Map = () => {
-  const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(defaultStyle);
+  // Initialize map with appropriate style based on API key availability
+  const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(getAppropriateMapStyle());
   const cameraRef = React.useRef<CameraRef>(null);
   const mapRef = React.useRef<MapViewRef>(null);
   const [gnssEnabled, setGnssEnabled] = React.useState(false);
