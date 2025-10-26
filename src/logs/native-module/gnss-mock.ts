@@ -6,16 +6,7 @@ import type {
   Position as GeoJSONPosition,
 } from 'geojson';
 import rawGnssLog from './gnss_raw.json';
-
-type ConstellationName =
-  | 'GPS'
-  | 'GLONASS'
-  | 'GALILEO'
-  | 'BEIDOU'
-  | 'QZSS'
-  | 'NAVIC'
-  | 'SBAS'
-  | 'UNKNOWN';
+import { CARRIER_FREQUENCIES_BAND, CONSTELLATION_TYPE_MAP, ConstellationName, FrequencyBandInfo } from '../../constants/Constellations';
 
 type RawMeasurementEntry = {
   type: 'measurement';
@@ -46,20 +37,12 @@ export interface SatelliteInfo {
   timeNanos: number;
   constellationType: number;
   constellationName: ConstellationName;
-  cn0DbHz?: number;
-  elevation?: number;
-  azimuth?: number;
+  cn0DbHz: number;
+  carrierFrequencyHz: number;
+  // Calculated fields below
   hasEphemeris: boolean;
   hasAlmanac: boolean;
   usedInFix: boolean;
-  carrierFrequencyHz?: number;
-}
-
-export interface FrequencyBandInfo {
-  frequency: number;
-  constellation: ConstellationName;
-  band: string;
-  isDualFrequency: boolean;
 }
 
 export interface GnssStatusResult {
@@ -78,88 +61,52 @@ export interface GnssStatusResult {
   supportsCarrierFreq?: boolean;
 }
 
-const CONSTELLATION_TYPE_MAP: Record<ConstellationName, number> = {
-  UNKNOWN: 0,
-  GPS: 1,
-  SBAS: 2,
-  GLONASS: 3,
-  QZSS: 4,
-  BEIDOU: 5,
-  GALILEO: 6,
-  NAVIC: 7,
-};
-
-const CARRIER_FREQUENCIES_MHZ = {
-  GPS_L1: 1575.42,
-  GPS_L2: 1227.6,
-  GPS_L5: 1176.45,
-  GLONASS_L1_CENTER: 1602.0,
-  GLONASS_L2_CENTER: 1246.0,
-  GLONASS_L5: 1176.45,
-  GALILEO_E1: 1575.42,
-  GALILEO_E5a: 1176.45,
-  GALILEO_E5b: 1207.14,
-  BEIDOU_B1: 1561.098,
-  BEIDOU_B2: 1207.14,
-  BEIDOU_B3: 1268.52,
-  SBAS_L1: 1575.42,
-  SBAS_L5: 1176.45,
-} as const;
-
 const identifyFrequencyBand = (
   frequencyMHz: number,
   tolerance: number = 1.0,
 ): FrequencyBandInfo => {
   const freq = frequencyMHz;
-
-  if (Math.abs(freq - CARRIER_FREQUENCIES_MHZ.GPS_L1) <= tolerance) {
-    return { frequency: freq, constellation: 'GPS', band: 'L1', isDualFrequency: false };
+  if (Math.abs(freq - CARRIER_FREQUENCIES_BAND.GPS_L1.frequency) <= tolerance) {
+    return CARRIER_FREQUENCIES_BAND.GPS_L1;
   }
-  if (Math.abs(freq - CARRIER_FREQUENCIES_MHZ.GPS_L2) <= tolerance) {
-    return { frequency: freq, constellation: 'GPS', band: 'L2', isDualFrequency: true };
+  if (Math.abs(freq - CARRIER_FREQUENCIES_BAND.GPS_L2.frequency) <= tolerance) {
+    return CARRIER_FREQUENCIES_BAND.GPS_L2;
   }
-  if (Math.abs(freq - CARRIER_FREQUENCIES_MHZ.GPS_L5) <= tolerance) {
-    return { frequency: freq, constellation: 'GPS', band: 'L5', isDualFrequency: true };
-  }
-
-  if (Math.abs(freq - CARRIER_FREQUENCIES_MHZ.GLONASS_L1_CENTER) <= tolerance) {
-    return { frequency: freq, constellation: 'GLONASS', band: 'L1', isDualFrequency: false };
-  }
-  if (Math.abs(freq - CARRIER_FREQUENCIES_MHZ.GLONASS_L2_CENTER) <= tolerance) {
-    return { frequency: freq, constellation: 'GLONASS', band: 'L2', isDualFrequency: true };
-  }
-  if (Math.abs(freq - CARRIER_FREQUENCIES_MHZ.GLONASS_L5) <= tolerance) {
-    return { frequency: freq, constellation: 'GLONASS', band: 'L5', isDualFrequency: true };
+  if (Math.abs(freq - CARRIER_FREQUENCIES_BAND.GPS_L5.frequency) <= tolerance) {
+    return CARRIER_FREQUENCIES_BAND.GPS_L5;
   }
 
-  if (Math.abs(freq - CARRIER_FREQUENCIES_MHZ.GALILEO_E1) <= tolerance) {
-    return { frequency: freq, constellation: 'GALILEO', band: 'E1', isDualFrequency: false };
+  if (Math.abs(freq - CARRIER_FREQUENCIES_BAND.GLONASS_L1_CENTER.frequency) <= tolerance) {
+    return CARRIER_FREQUENCIES_BAND.GLONASS_L1_CENTER;
   }
-  if (Math.abs(freq - CARRIER_FREQUENCIES_MHZ.GALILEO_E5a) <= tolerance) {
-    return { frequency: freq, constellation: 'GALILEO', band: 'E5a', isDualFrequency: true };
+  if (Math.abs(freq - CARRIER_FREQUENCIES_BAND.GLONASS_L2_CENTER.frequency) <= tolerance) {
+    return CARRIER_FREQUENCIES_BAND.GLONASS_L2_CENTER;
   }
-  if (Math.abs(freq - CARRIER_FREQUENCIES_MHZ.GALILEO_E5b) <= tolerance) {
-    return { frequency: freq, constellation: 'GALILEO', band: 'E5b', isDualFrequency: true };
-  }
-
-  if (Math.abs(freq - CARRIER_FREQUENCIES_MHZ.BEIDOU_B1) <= tolerance) {
-    return { frequency: freq, constellation: 'BEIDOU', band: 'B1', isDualFrequency: false };
-  }
-  if (Math.abs(freq - CARRIER_FREQUENCIES_MHZ.BEIDOU_B2) <= tolerance) {
-    return { frequency: freq, constellation: 'BEIDOU', band: 'B2', isDualFrequency: true };
-  }
-  if (Math.abs(freq - CARRIER_FREQUENCIES_MHZ.BEIDOU_B3) <= tolerance) {
-    return { frequency: freq, constellation: 'BEIDOU', band: 'B3', isDualFrequency: true };
+  if (Math.abs(freq - CARRIER_FREQUENCIES_BAND.GLONASS_L5.frequency) <= tolerance) {
+    return CARRIER_FREQUENCIES_BAND.GLONASS_L5;
   }
 
-  if (Math.abs(freq - CARRIER_FREQUENCIES_MHZ.SBAS_L1) <= tolerance) {
-    return { frequency: freq, constellation: 'SBAS', band: 'L1', isDualFrequency: false };
+  if (Math.abs(freq - CARRIER_FREQUENCIES_BAND.GALILEO_E1.frequency) <= tolerance) {
+    return CARRIER_FREQUENCIES_BAND.GALILEO_E1;
   }
-  if (Math.abs(freq - CARRIER_FREQUENCIES_MHZ.SBAS_L5) <= tolerance) {
-    return { frequency: freq, constellation: 'SBAS', band: 'L5', isDualFrequency: true };
+  if (Math.abs(freq - CARRIER_FREQUENCIES_BAND.GALILEO_E5a.frequency) <= tolerance) {
+    return CARRIER_FREQUENCIES_BAND.GALILEO_E5a;
+  }
+  if (Math.abs(freq - CARRIER_FREQUENCIES_BAND.GALILEO_E5b.frequency) <= tolerance) {
+    return CARRIER_FREQUENCIES_BAND.GALILEO_E5b;
   }
 
-  return { frequency: freq, constellation: 'UNKNOWN', band: 'UNKNOWN', isDualFrequency: false };
+  if (Math.abs(freq - CARRIER_FREQUENCIES_BAND.BEIDOU_B1.frequency) <= tolerance) {
+    return CARRIER_FREQUENCIES_BAND.BEIDOU_B1;
+  }
+  if (Math.abs(freq - CARRIER_FREQUENCIES_BAND.BEIDOU_B2.frequency) <= tolerance) {
+    return CARRIER_FREQUENCIES_BAND.BEIDOU_B2;
+  }
+  if (Math.abs(freq - CARRIER_FREQUENCIES_BAND.BEIDOU_B3.frequency) <= tolerance) {
+    return CARRIER_FREQUENCIES_BAND.BEIDOU_B3;
+  }
+
+  return CARRIER_FREQUENCIES_BAND.UNKNOWN;
 };
 
 type Fix = {
@@ -187,19 +134,18 @@ const groupFixes = (): Fix[] => {
 };
 
 const toSatelliteInfo = (measurement: RawMeasurementEntry): SatelliteInfo => {
-  const constellation = measurement.constellation ?? 'UNKNOWN';
-  const cn0 = measurement.cn0DbHz;
+  const { svid, constellation, timeNanos, cn0DbHz, carrierFrequencyHz } = measurement;
 
   return {
-    svid: measurement.svid,
-    timeNanos: measurement.timeNanos,
-    constellationType: CONSTELLATION_TYPE_MAP[constellation] ?? 0,
-    constellationName: constellation,
-    cn0DbHz: cn0,
-    hasEphemeris: cn0 >= 20,
+    svid: svid,
+    timeNanos: timeNanos,
+    constellationType: CONSTELLATION_TYPE_MAP[constellation ?? 0],
+    constellationName: constellation ?? 'UNKNOWN',
+    cn0DbHz: cn0DbHz,
+    carrierFrequencyHz: carrierFrequencyHz,
+    hasEphemeris: cn0DbHz >= 20,
     hasAlmanac: true,
-    usedInFix: cn0 >= 30,
-    carrierFrequencyHz: measurement.carrierFrequencyHz,
+    usedInFix: cn0DbHz >= 30,
   };
 };
 
@@ -285,10 +231,10 @@ const speedKnotsValues = fixes.map((fix) => metresPerSecondToKnots(fix.location.
 const avgSpeedKts =
   speedKnotsValues.length > 0
     ? Number(
-        (
-          speedKnotsValues.reduce((sum, value) => sum + value, 0) / speedKnotsValues.length
-        ).toFixed(2),
-      )
+      (
+        speedKnotsValues.reduce((sum, value) => sum + value, 0) / speedKnotsValues.length
+      ).toFixed(2),
+    )
     : 0;
 const maxSpeedKts =
   speedKnotsValues.length > 0 ? Math.max(...speedKnotsValues) : 0;

@@ -191,7 +191,7 @@ const gnssTrackLayer: LineLayerSpecification = {
     'line-color': [
       'interpolate',
       ['linear'],
-      ['coalesce', ['get', 'gnssSatUsed'], 0],
+      ['coalesce', ['get', 'gnssSatVisible'], 0],
       0, '#991b1b',
       5, '#f97316',
       10, '#84cc16',

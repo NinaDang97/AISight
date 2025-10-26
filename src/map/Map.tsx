@@ -4,7 +4,6 @@ import {
   CameraRef,
   CameraStop,
   MapView,
-  MarkerView,
   type MapViewRef,
 } from '@maplibre/maplibre-react-native';
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
