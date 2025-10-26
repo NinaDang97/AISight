@@ -13,6 +13,7 @@ const searchIcon = require('../../assets/images/icons/search-icon.png');
 const vesselIcon = require('../../assets/images/icons/vessel-icon.png');
 const portIcon = require('../../assets/images/icons/port-icon.png');
 const mapLayerIcon = require('../../assets/images/icons/map-layer-icon.png');
+const antennaIcon = require('../../assets/images/icons/antenna-icon.png');
 
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
@@ -25,6 +26,7 @@ const Map = () => {
   const cameraRef = React.useRef<CameraRef>(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [isGnssEnabled, setIsGnssEnabled] = useState(false);
 
   const {
     hasLocationPermission,
@@ -136,6 +138,18 @@ const Map = () => {
     console.log('Map layer button pressed');
   };
 
+  // Handle GNSS toggle button press
+  const handleGnssToggle = () => {
+    setIsGnssEnabled(!isGnssEnabled);
+    // TODO: Implement GNSS functionality
+    // - Toggle GNSS data overlay on map
+    // - Show satellite positioning information
+    // - Display GNSS signal strength indicators
+    // - Show positioning accuracy
+    // - Save GNSS toggle state preference
+    console.log('GNSS toggled:', !isGnssEnabled);
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar
@@ -200,6 +214,21 @@ const Map = () => {
         <Image
           source={mapLayerIcon}
           style={styles.mapLayerIcon}
+          resizeMode="contain"
+        />
+      </TouchableOpacity>
+
+      {/* GNSS Toggle Button */}
+      <TouchableOpacity
+        style={[
+          styles.gnssButton,
+          isGnssEnabled && styles.gnssButtonActive
+        ]}
+        onPress={handleGnssToggle}
+        activeOpacity={0.8}>
+        <Image
+          source={antennaIcon}
+          style={styles.gnssIcon}
           resizeMode="contain"
         />
       </TouchableOpacity>
@@ -339,6 +368,29 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   mapLayerIcon: {
+    width: 24,
+    height: 24,
+  },
+  gnssButton: {
+    position: 'absolute',
+    top: 188,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  gnssButtonActive: {
+    backgroundColor: '#08A315',
+  },
+  gnssIcon: {
     width: 24,
     height: 24,
   },
