@@ -19,12 +19,17 @@ interface FinTrafficVesselFeature
   mmsi: number;
 }
 
-interface FinTrafficVesselFC extends GeoJSON.FeatureCollection {
+export interface FinTrafficVesselFC extends GeoJSON.FeatureCollection {
   dataUpdatedTime: string;
   features: FinTrafficVesselFeature[];
 }
 
-interface FinTrafficVesselMetadata {
+export interface VesselMetadataCollection {
+  dataFetched: number;
+  metadataRecords: FinTrafficVesselMetadata[];
+}
+
+export interface FinTrafficVesselMetadata {
   name: string;
   timestamp: number;
   destination: string;
@@ -47,9 +52,17 @@ export interface VesselFC extends FinTrafficVesselFC {
   features: VesselFeature[];
 }
 
+/**
+ *
+ * @param currentCenter Center position of the screen as GeoJSON.Position
+ * @param visibleBounds
+ * @returns
+ */
 export const makeAisApiUrl = (
   currentCenter: GeoJSON.Position,
   visibleBounds: [GeoJSON.Position, GeoJSON.Position],
+  from: number = Date.now() - 120000,
+  to: number = Date.now(),
 ) => {
   // FinTraffic AIS API doesn't support bounding boxes
   const topleft: GeoJSON.Position = visibleBounds[0];
@@ -57,11 +70,11 @@ export const makeAisApiUrl = (
     Math.sqrt(
       Math.pow(topleft[0] - currentCenter[0], 2) + Math.pow(topleft[1] - currentCenter[1], 2),
     ) * 111; // rough conversion to kilometers
-  const sourceString = `${FINTRAFFIC_AIS_BASE_URL}/locations?radius=${radius}&latitude=${currentCenter[1]}&longitude=${currentCenter[0]}`;
+  const sourceString = `${FINTRAFFIC_AIS_BASE_URL}/locations?radius=${radius}&latitude=${currentCenter[1]}&longitude=${currentCenter[0]}&from=${from}&to=${to}`;
   return sourceString;
 };
 
-const fetchVessels = async (url: string): Promise<FinTrafficVesselFC> =>
+export const fetchVessels = async (url: string): Promise<FinTrafficVesselFC> =>
   fetch(url)
     .then(Response => {
       if (!Response.ok) {
@@ -73,6 +86,19 @@ const fetchVessels = async (url: string): Promise<FinTrafficVesselFC> =>
       console.error('Error fetching AIS data:', error);
       throw error;
     });
+
+const fetchMetadataForAllVessels = async (): Promise<VesselMetadataCollection> => {
+  const Response = await fetch(`${FINTRAFFIC_AIS_BASE_URL}/vessels`);
+  if (!Response.ok) {
+    throw new Error(`HTTP response error: ${Response.status}`);
+  }
+
+  const metadataRecords: FinTrafficVesselMetadata[] = await Response.json();
+  return {
+    dataFetched: Date.now(),
+    metadataRecords,
+  };
+};
 
 const fetchVesselMetadata = async (mmsi: number): Promise<FinTrafficVesselMetadata> =>
   fetch(`${FINTRAFFIC_AIS_BASE_URL}/vessels/${mmsi}`)
@@ -87,7 +113,7 @@ const fetchVesselMetadata = async (mmsi: number): Promise<FinTrafficVesselMetada
       throw error;
     });
 
-export const fetchVesselsWithMetadata = async (url: string): Promise<VesselFC> => {
+const fetchVesselsWithMetadata = async (url: string): Promise<VesselFC> => {
   const vesselFC: FinTrafficVesselFC = await fetchVessels(url);
 
   const featuresWithMetadata: VesselFeature[] = await Promise.all(

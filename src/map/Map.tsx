@@ -12,7 +12,14 @@ import {
 } from '@maplibre/maplibre-react-native';
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { addPointLayers, getAppropriateMapStyle, updateShipData } from './map-styles/styles';
-import { fetchVesselsWithMetadata, makeAisApiUrl, VesselFC } from './map-utils';
+import {
+  fetchVessels,
+  FinTrafficVesselFC,
+  FinTrafficVesselMetadata,
+  makeAisApiUrl,
+  VesselFC,
+  VesselMetadataCollection,
+} from './map-utils';
 
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
@@ -21,12 +28,33 @@ const cameraInitStop: CameraStop = {
 
 const Map = () => {
   // Initialize map with appropriate style based on API key availability
-  const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(getAppropriateMapStyle());
+  const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(
+    addPointLayers(getAppropriateMapStyle()),
+  );
+  const [vesselMetadata, setVesselMetadata] = React.useState<VesselMetadataCollection>(); // TODO: load all metadata to separate state
   const cameraRef = React.useRef<CameraRef>(null);
   const mapRef = React.useRef<MapViewRef>(null);
   const userLocationRef = React.useRef<UserLocationRef>(null);
 
-  const addPoints = () => setMapStyle(addPointLayers(mapStyle));
+  React.useEffect(() => {
+    let mounted = true;
+
+    const tick = async () => {
+      try {
+        updateVesselData();
+      } catch (err) {
+        console.warn('Periodic ship update failed', err);
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, 5_000);
+
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, []);
 
   const updateVesselData = async () => {
     const currentCenter = await mapRef.current?.getCenter();
@@ -36,9 +64,9 @@ const Map = () => {
     if (!visibleBounds) throw new Error('Error getting map bounds');
 
     const url = makeAisApiUrl(currentCenter, visibleBounds);
-    const vessels: VesselFC = await fetchVesselsWithMetadata(url);
+    const vessels: VesselFC = await fetchVessels(url);
     console.log(vessels);
-    setMapStyle(updateShipData(mapStyle, vessels));
+    setMapStyle(prev => updateShipData(prev, vessels));
   };
 
   const resetCamera = () => {
@@ -47,14 +75,18 @@ const Map = () => {
 
   return (
     <View style={styles.container}>
-      <MapView ref={mapRef} style={styles.map} mapStyle={mapStyle} attributionEnabled={false}>
+      <MapView
+        ref={mapRef}
+        style={styles.map}
+        mapStyle={mapStyle}
+        attributionEnabled={false}
+        onRegionWillChange={() => updateVesselData()}
+      >
         <Camera ref={cameraRef} defaultSettings={cameraInitStop} />
         <UserLocation ref={userLocationRef} renderMode="native" androidRenderMode="compass" />
       </MapView>
       <View style={styles.buttonContainer}>
         <Button title="Reset" onPress={resetCamera}></Button>
-        <Button title="Point Layer" onPress={addPoints}></Button>
-        <Button title="Update vessels" onPress={updateVesselData} />
         <Button
           title="Jmp2Usr"
           onPress={async () =>
