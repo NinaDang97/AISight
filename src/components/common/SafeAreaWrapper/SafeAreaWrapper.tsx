@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, StatusBar, ViewStyle } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import { colors } from '../../../styles';
 
 interface SafeAreaWrapperProps {
@@ -8,6 +8,7 @@ interface SafeAreaWrapperProps {
   style?: ViewStyle;
   backgroundColor?: string;
   barStyle?: 'light-content' | 'dark-content';
+  edges?: readonly Edge[];
 }
 
 export const SafeAreaWrapper: React.FC<SafeAreaWrapperProps> = ({
@@ -15,9 +16,10 @@ export const SafeAreaWrapper: React.FC<SafeAreaWrapperProps> = ({
   style,
   backgroundColor = colors.background,
   barStyle = 'dark-content',
+  edges,
 }) => {
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor }, style]}>
+    <SafeAreaView style={[styles.container, { backgroundColor }, style]} edges={edges}>
       <StatusBar barStyle={barStyle} backgroundColor={backgroundColor} />
       {children}
     </SafeAreaView>

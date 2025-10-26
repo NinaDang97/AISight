@@ -90,7 +90,7 @@ export const MapScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaWrapper backgroundColor={colors.background} barStyle="dark-content">
+    <SafeAreaWrapper backgroundColor="transparent" barStyle="dark-content" edges={['bottom', 'left', 'right']}>
       <View style={styles.container}>
         <Map />
 

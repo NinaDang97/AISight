@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import { Button, View, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
+import { Button, View, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, TextInput, StatusBar } from 'react-native';
 import { Camera, CameraRef, CameraStop, MapView } from '@maplibre/maplibre-react-native';
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { addPointLayer, getAppropriateMapStyle } from './map-styles/styles';
@@ -9,6 +9,7 @@ import {RESULTS} from 'react-native-permissions';
 import {LocationService} from '../services/location';
 
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
+const searchIcon = require('../../assets/images/icons/search-icon.png');
 
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
@@ -92,11 +93,46 @@ const Map = () => {
     console.log('User declined location permission');
   };
 
+  // Handle search input
+  const handleSearchPress = () => {
+    // TODO: Implement search functionality
+    // - Search for vessels by name/MMSI
+    // - Search for locations/coordinates
+    // - Show search results dropdown
+    console.log('Search pressed');
+  };
+
   return (
     <View style={styles.container}>
+      <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle="dark-content"
+      />
       <MapView style={styles.map} mapStyle={mapStyle}>
         <Camera ref={cameraRef} defaultSettings={cameraInitStop} />
       </MapView>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <TouchableOpacity
+          style={styles.searchBar}
+          onPress={handleSearchPress}
+          activeOpacity={0.7}>
+          <Image
+            source={searchIcon}
+            style={styles.searchIcon}
+            resizeMode="contain"
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search..."
+            placeholderTextColor="#999"
+            editable={false}
+            pointerEvents="none"
+          />
+        </TouchableOpacity>
+      </View>
 
       {/* Navigation Button */}
       <TouchableOpacity
@@ -145,6 +181,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingHorizontal: 20,
+  },
+  searchContainer: {
+    position: 'absolute',
+    top: 60,
+    left: 16,
+    right: 16,
+    zIndex: 10,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  searchIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 12,
+    tintColor: '#999',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    padding: 0,
   },
   navigationButton: {
     position: 'absolute',
