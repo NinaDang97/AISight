@@ -8,7 +8,11 @@ import {
 } from '@maplibre/maplibre-react-native';
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { Button, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { Feature as GeoJSONFeature, Position as GeoJSONPosition } from 'geojson';
+import type {
+  Feature as GeoJSONFeature,
+  FeatureCollection as GeoJSONFeatureCollection,
+  Position as GeoJSONPosition,
+} from 'geojson';
 import {
   addGnssMockLayer,
   addShipLayer,
@@ -79,10 +83,63 @@ const Map = () => {
     }
   }, [gnssEnabled]);
 
+  const handleMapPress = React.useCallback(
+    async (feature: GeoJSONFeature) => {
+      if (!mapRef.current || !gnssEnabled) {
+        setSelectedGnss(null);
+        return;
+      }
+
+      const screenPointX = Number(
+        (feature.properties as { screenPointX?: number } | undefined)?.screenPointX,
+      );
+      const screenPointY = Number(
+        (feature.properties as { screenPointY?: number } | undefined)?.screenPointY,
+      );
+
+      if (Number.isNaN(screenPointX) || Number.isNaN(screenPointY)) {
+        setSelectedGnss(null);
+        return;
+      }
+
+      try {
+        const collection: GeoJSONFeatureCollection =
+          await mapRef.current.queryRenderedFeaturesAtPoint(
+            [screenPointX, screenPointY],
+            undefined,
+            ['gnss-mock-points'],
+          );
+
+        const tappedFeature = collection.features[0];
+        if (!tappedFeature) {
+          setSelectedGnss(null);
+          return;
+        }
+
+        const fixIndex = Number(
+          (tappedFeature.properties as { fixIndex?: number } | undefined)?.fixIndex,
+        );
+        const detail = Number.isInteger(fixIndex) ? gnssFixDetails[fixIndex] : undefined;
+
+        if (detail) {
+          setSelectedGnss({
+            coordinate: detail.coordinate,
+            detail,
+          });
+        } else {
+          setSelectedGnss(null);
+        }
+      } catch (error) {
+        console.warn('Unable to resolve GNSS selection', error);
+        setSelectedGnss(null);
+      }
+    },
+    [gnssEnabled],
+  );
 
   return (
     <>
-      <MapView ref={mapRef} style={{ flex: 1 }} mapStyle={mapStyle}>
+      <MapView ref={mapRef} style={{ flex: 1 }} mapStyle={mapStyle} onPress={handleMapPress}>
         <Camera ref={cameraRef} />
       </MapView>
 
@@ -103,6 +160,28 @@ const Map = () => {
         </Pressable>
       </View>
       <Button title="Reset" onPress={resetCamera} />
+      {selectedGnss && (
+        <View style={styles.gnssDetailCard}>
+          <View style={styles.gnssDetailHeader}>
+            <Text style={styles.gnssDetailTitle}>GNSS fix #{selectedGnss.detail.fixIndex}</Text>
+            <Pressable onPress={() => setSelectedGnss(null)} hitSlop={10}>
+              <Text style={styles.gnssDetailClose}>Close</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.gnssDetailMeta}>Time: {selectedGnss.detail.timestamp}</Text>
+          <Text style={styles.gnssDetailMeta}>
+            Speed: {selectedGnss.detail.speedKts} kts ({selectedGnss.detail.speedMps} m/s)
+          </Text>
+          <Text style={styles.gnssDetailMeta}>
+            Satellites used: {selectedGnss.detail.status.satellitesUsedInFix}
+          </Text>
+          <Text style={styles.gnssDetailMeta}>
+            Average Cn0: {selectedGnss.detail.status.averageSignalToNoiseRatio}
+          </Text>
+          <Text style={styles.gnssDetailMeta}>Sea state: {selectedGnss.detail.seaState}</Text>
+          <Text style={styles.gnssDetailMeta}>Nav status: {selectedGnss.detail.navStatus}</Text>
+        </View>
+      )}
     </>
   );
 };
@@ -141,5 +220,39 @@ const styles = StyleSheet.create({
     color: '#e2e8f0',
     fontSize: 18,
     fontWeight: '600',
-  }
+  },
+  gnssDetailCard: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  gnssDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  gnssDetailTitle: {
+    color: '#f8fafc',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  gnssDetailClose: {
+    color: '#94a3b8',
+    fontSize: 14,
+  },
+  gnssDetailMeta: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    marginTop: 4,
+  },
 });
