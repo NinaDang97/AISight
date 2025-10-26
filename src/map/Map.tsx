@@ -38,9 +38,16 @@ const cameraInitStop: CameraStop = {
   zoomLevel: 5,
 };
 
+const defaultCameraCenter = cameraInitStop.centerCoordinate as GeoJSONPosition;
+
 type SelectedGnss = {
   coordinate: GeoJSONPosition;
   detail: GnssFixDetail;
+};
+
+type RegionChangeProperties = {
+  zoomLevel?: number;
+  isUserInteraction?: boolean;
 };
 
 const Map = () => {
@@ -53,6 +60,13 @@ const Map = () => {
   const [selectedGnss, setSelectedGnss] = React.useState<SelectedGnss | null>(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const lastUserCameraRef = React.useRef<{
+    centerCoordinate: GeoJSONPosition;
+    zoomLevel?: number;
+  }>({
+    centerCoordinate: defaultCameraCenter,
+    zoomLevel: cameraInitStop.zoomLevel,
+  });
 
   const {
     hasLocationPermission,
@@ -65,40 +79,40 @@ const Map = () => {
 
   // Center map on user's current location
   const centerOnUserLocation = async () => {
-    // setIsLoadingLocation(true);
-    // try {
-    //   const position = await LocationService.getCurrentPosition();
+    setIsLoadingLocation(true);
+    try {
+      const position = await LocationService.getCurrentPosition();
 
-    //   // Center camera on user location with animation
-    //   cameraRef.current?.setCamera({
-    //     centerCoordinate: [position.longitude, position.latitude],
-    //     zoomLevel: 14,
-    //     animationDuration: 1000,
-    //   });
+      // Center camera on user location with animation
+      cameraRef.current?.setCamera({
+        centerCoordinate: [position.longitude, position.latitude],
+        zoomLevel: 14,
+        animationDuration: 1000,
+      });
 
-    //   console.log('Centered on user location:', position);
-    // } catch (error: any) {
-    //   console.error('Error getting location:', error);
+      console.log('Centered on user location:', position);
+    } catch (error: any) {
+      console.error('Error getting location:', error);
 
-    //   Alert.alert(
-    //     'Location Error',
-    //     'Unable to get your current location. Please make sure location services are enabled.',
-    //     [{ text: 'OK' }]
-    //   );
-    // } finally {
-    //   setIsLoadingLocation(false);
-    // }
+      Alert.alert(
+        'Location Error',
+        'Unable to get your current location. Please make sure location services are enabled.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsLoadingLocation(false);
+    }
   };
 
   // Handle navigation/location button press
   const handleNavigationPress = async () => {
-    // if (hasLocationPermission) {
-    //   // Already have permission, center on user location
-    //   await centerOnUserLocation();
-    // } else {
-    //   // Show permission modal
-    //   setShowLocationModal(true);
-    // }
+    if (hasLocationPermission) {
+      // Already have permission, center on user location
+      await centerOnUserLocation();
+    } else {
+      // Show permission modal
+      setShowLocationModal(true);
+    }
   };
 
   // Handle "Continue" button - show native permission dialog
@@ -181,6 +195,48 @@ const Map = () => {
     });
   }, [isGnssEnabled, isShipEnabled]);
 
+  const restoreCameraToLastUserView = useCallback(() => {
+    const { centerCoordinate, zoomLevel } = lastUserCameraRef.current;
+    if (!centerCoordinate) {
+      return;
+    }
+
+    const nextStop: CameraStop = {
+      centerCoordinate,
+      animationDuration: 0,
+      animationMode: 'moveTo',
+    };
+
+    if (typeof zoomLevel === 'number') {
+      nextStop.zoomLevel = zoomLevel;
+    }
+
+    cameraRef.current?.setCamera(nextStop);
+  }, []);
+
+  const handleRegionDidChange = useCallback(
+    (feature: GeoJSONFeature) => {
+      const properties = feature.properties as RegionChangeProperties | undefined;
+      const coordinates =
+        feature.geometry?.type === 'Point'
+          ? (feature.geometry.coordinates as GeoJSONPosition)
+          : undefined;
+
+      if (!properties?.isUserInteraction || !coordinates) {
+        return;
+      }
+
+      lastUserCameraRef.current = {
+        centerCoordinate: coordinates,
+        zoomLevel:
+          typeof properties.zoomLevel === 'number'
+            ? properties.zoomLevel
+            : lastUserCameraRef.current.zoomLevel,
+      };
+    },
+    [],
+  );
+
   const handleMapPress = useCallback(
     async (feature: GeoJSONFeature) => {
       if (!mapRef.current || !isGnssEnabled) {
@@ -224,6 +280,7 @@ const Map = () => {
             coordinate: detail.coordinate,
             detail,
           });
+          restoreCameraToLastUserView();
         } else {
           setSelectedGnss(null);
         }
@@ -232,7 +289,7 @@ const Map = () => {
         setSelectedGnss(null);
       }
     },
-    [isGnssEnabled],
+    [isGnssEnabled, restoreCameraToLastUserView],
   );
 
   return (
@@ -242,7 +299,12 @@ const Map = () => {
         backgroundColor="transparent"
         barStyle="dark-content"
       />
-      <MapView ref={mapRef} style={styles.map} mapStyle={mapStyle} onPress={handleMapPress}>
+      <MapView
+        ref={mapRef}
+        style={styles.map}
+        mapStyle={mapStyle}
+        onPress={handleMapPress}
+        onRegionDidChange={handleRegionDidChange}>
         <Camera ref={cameraRef} defaultSettings={cameraInitStop} />
       </MapView>
 
