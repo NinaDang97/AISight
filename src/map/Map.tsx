@@ -1,12 +1,13 @@
 import React, {useState} from 'react';
-import { Button, View, StyleSheet, TouchableOpacity } from 'react-native';
+import { Button, View, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Camera, CameraRef, CameraStop, MapView } from '@maplibre/maplibre-react-native';
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { addPointLayer, getAppropriateMapStyle } from './map-styles/styles';
-import Icon from 'react-native-vector-icons/Ionicons';
 import {LocationPermissionModal} from '../components/modals/PermissionModals';
 import {usePermissions} from '../hooks';
 import {RESULTS} from 'react-native-permissions';
+
+const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
@@ -74,10 +75,10 @@ const Map = () => {
         style={styles.navigationButton}
         onPress={handleNavigationPress}
         activeOpacity={0.8}>
-        <Icon
-          name="navigate"
-          size={24}
-          color={hasLocationPermission ? '#5856D6' : '#FFFFFF'}
+        <Image
+          source={navigationIcon}
+          style={styles.navigationIcon}
+          resizeMode="contain"
         />
       </TouchableOpacity>
 
@@ -114,12 +115,12 @@ const styles = StyleSheet.create({
   },
   navigationButton: {
     position: 'absolute',
-    top: 60,
+    bottom: 100,
     right: 20,
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#2C2C2E',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -127,6 +128,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  navigationIcon: {
+    width: 24,
+    height: 24,
   },
 });
 
