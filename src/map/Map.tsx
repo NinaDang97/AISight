@@ -12,6 +12,7 @@ const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
 const vesselIcon = require('../../assets/images/icons/vessel-icon.png');
 const portIcon = require('../../assets/images/icons/port-icon.png');
+const mapLayerIcon = require('../../assets/images/icons/map-layer-icon.png');
 
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
@@ -125,6 +126,16 @@ const Map = () => {
     console.log('Port button pressed');
   };
 
+  // Handle map layer button press
+  const handleMapLayerPress = () => {
+    // TODO: Implement map layer switching functionality
+    // - Show layer options: Standard, Satellite, Hybrid, Nautical Chart
+    // - Allow user to toggle between different map styles
+    // - Save selected layer preference
+    // - Update map view with selected layer
+    console.log('Map layer button pressed');
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar
@@ -180,6 +191,18 @@ const Map = () => {
           />
         </TouchableOpacity>
       </View>
+
+      {/* Map Layer Button */}
+      <TouchableOpacity
+        style={styles.mapLayerButton}
+        onPress={handleMapLayerPress}
+        activeOpacity={0.8}>
+        <Image
+          source={mapLayerIcon}
+          style={styles.mapLayerIcon}
+          resizeMode="contain"
+        />
+      </TouchableOpacity>
 
       {/* Navigation Button */}
       <TouchableOpacity
@@ -296,6 +319,26 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   portIcon: {
+    width: 24,
+    height: 24,
+  },
+  mapLayerButton: {
+    position: 'absolute',
+    top: 128,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  mapLayerIcon: {
     width: 24,
     height: 24,
   },
