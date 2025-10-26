@@ -1,11 +1,12 @@
 import React, {useState} from 'react';
-import { Button, View, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { Button, View, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
 import { Camera, CameraRef, CameraStop, MapView } from '@maplibre/maplibre-react-native';
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { addPointLayer, getAppropriateMapStyle } from './map-styles/styles';
 import {LocationPermissionModal} from '../components/modals/PermissionModals';
 import {usePermissions} from '../hooks';
 import {RESULTS} from 'react-native-permissions';
+import {LocationService} from '../services/location';
 
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 
@@ -19,6 +20,7 @@ const Map = () => {
   const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(getAppropriateMapStyle());
   const cameraRef = React.useRef<CameraRef>(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
   const {
     hasLocationPermission,
@@ -33,12 +35,38 @@ const Map = () => {
     cameraRef.current?.setCamera(cameraInitStop);
   };
 
+  // Center map on user's current location
+  const centerOnUserLocation = async () => {
+    setIsLoadingLocation(true);
+    try {
+      const position = await LocationService.getCurrentPosition();
+
+      // Center camera on user location with animation
+      cameraRef.current?.setCamera({
+        centerCoordinate: [position.longitude, position.latitude],
+        zoomLevel: 14,
+        animationDuration: 1000,
+      });
+
+      console.log('Centered on user location:', position);
+    } catch (error: any) {
+      console.error('Error getting location:', error);
+
+      Alert.alert(
+        'Location Error',
+        'Unable to get your current location. Please make sure location services are enabled.',
+        [{text: 'OK'}]
+      );
+    } finally {
+      setIsLoadingLocation(false);
+    }
+  };
+
   // Handle navigation/location button press
   const handleNavigationPress = async () => {
     if (hasLocationPermission) {
       // Already have permission, center on user location
-      console.log('Centering on user location');
-      // TODO: Implement actual location centering
+      await centerOnUserLocation();
     } else {
       // Show permission modal
       setShowLocationModal(true);
@@ -51,8 +79,8 @@ const Map = () => {
     // Request permission - this will show the native system dialog
     const result = await requestLocation();
     if (result === RESULTS.GRANTED) {
-      console.log('Location permission granted, centering on user');
-      // TODO: Implement actual location centering
+      // Permission granted, center on user location
+      await centerOnUserLocation();
     } else {
       console.log('Location permission denied in native dialog');
     }
@@ -74,12 +102,17 @@ const Map = () => {
       <TouchableOpacity
         style={styles.navigationButton}
         onPress={handleNavigationPress}
-        activeOpacity={0.8}>
-        <Image
-          source={navigationIcon}
-          style={styles.navigationIcon}
-          resizeMode="contain"
-        />
+        activeOpacity={0.8}
+        disabled={isLoadingLocation}>
+        {isLoadingLocation ? (
+          <ActivityIndicator size="small" color="#5856D6" />
+        ) : (
+          <Image
+            source={navigationIcon}
+            style={styles.navigationIcon}
+            resizeMode="contain"
+          />
+        )}
       </TouchableOpacity>
 
       <View style={styles.buttonContainer}>
