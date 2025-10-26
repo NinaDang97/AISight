@@ -11,6 +11,7 @@ import {LocationService} from '../services/location';
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
 const vesselIcon = require('../../assets/images/icons/vessel-icon.png');
+const portIcon = require('../../assets/images/icons/port-icon.png');
 
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
@@ -113,6 +114,17 @@ const Map = () => {
     console.log('Vessel filter pressed');
   };
 
+  // Handle port button press
+  const handlePortPress = () => {
+    // TODO: Implement port functionality
+    // - Toggle port visibility on map
+    // - Show port information (name, type, facilities)
+    // - Display port markers with icons
+    // - Filter ports by type (cargo, passenger, fishing, etc.)
+    // - Show distance to nearest port
+    console.log('Port button pressed');
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar
@@ -152,6 +164,18 @@ const Map = () => {
           <Image
             source={vesselIcon}
             style={styles.vesselIcon}
+            resizeMode="contain"
+          />
+        </TouchableOpacity>
+
+        {/* Port Button */}
+        <TouchableOpacity
+          style={styles.portButton}
+          onPress={handlePortPress}
+          activeOpacity={0.8}>
+          <Image
+            source={portIcon}
+            style={styles.portIcon}
             resizeMode="contain"
           />
         </TouchableOpacity>
@@ -255,6 +279,23 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   vesselIcon: {
+    width: 24,
+    height: 24,
+  },
+  portButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  portIcon: {
     width: 24,
     height: 24,
   },
