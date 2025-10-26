@@ -10,6 +10,7 @@ import {LocationService} from '../services/location';
 
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
+const vesselIcon = require('../../assets/images/icons/vessel-icon.png');
 
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
@@ -102,6 +103,16 @@ const Map = () => {
     console.log('Search pressed');
   };
 
+  // Handle vessel filter button press
+  const handleVesselFilterPress = () => {
+    // TODO: Implement vessel filter functionality
+    // - Show bottom slider with vessel type options
+    // - Filter options: All Vessels, Cargo, Tanker, Passenger, Fishing, etc.
+    // - Update map to show only selected vessel types
+    // - Save filter preferences
+    console.log('Vessel filter pressed');
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar
@@ -113,8 +124,8 @@ const Map = () => {
         <Camera ref={cameraRef} defaultSettings={cameraInitStop} />
       </MapView>
 
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
+      {/* Search Bar and Vessel Filter */}
+      <View style={styles.topControlsContainer}>
         <TouchableOpacity
           style={styles.searchBar}
           onPress={handleSearchPress}
@@ -130,6 +141,18 @@ const Map = () => {
             placeholderTextColor="#999"
             editable={false}
             pointerEvents="none"
+          />
+        </TouchableOpacity>
+
+        {/* Vessel Filter Button */}
+        <TouchableOpacity
+          style={styles.vesselButton}
+          onPress={handleVesselFilterPress}
+          activeOpacity={0.8}>
+          <Image
+            source={vesselIcon}
+            style={styles.vesselIcon}
+            resizeMode="contain"
           />
         </TouchableOpacity>
       </View>
@@ -182,14 +205,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingHorizontal: 20,
   },
-  searchContainer: {
+  topControlsContainer: {
     position: 'absolute',
     top: 60,
     left: 16,
     right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     zIndex: 10,
   },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
@@ -213,6 +240,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     padding: 0,
+  },
+  vesselButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  vesselIcon: {
+    width: 24,
+    height: 24,
   },
   navigationButton: {
     position: 'absolute',
