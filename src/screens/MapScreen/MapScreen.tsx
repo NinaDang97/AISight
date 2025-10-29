@@ -3,7 +3,8 @@ import { View, StyleSheet } from 'react-native';
 import { SafeAreaWrapper } from '../../components/common/SafeAreaWrapper';
 import { colors } from '../../styles';
 import Map from '../../map/Map';
-import { VesselDetailsProvider, VesselDetailsScreen } from '../VesselDetailsScreen';
+import { VesselDetailsScreen } from '../VesselDetailsScreen';
+import { VesselDetailsProvider } from '../../components/contexts/VesselDetailsContext';
 
 export const MapScreen: React.FC = () => {
   return (

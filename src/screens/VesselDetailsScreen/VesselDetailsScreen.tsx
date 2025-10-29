@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Button } from '../../components/common/Button';
 import { colors, typography, spacing } from '../../styles';
+import { useVesselDetails } from '../../components/contexts/VesselDetailsContext';
 
 const VesselAISDetails: React.FC = () => {
   return (
@@ -68,31 +69,6 @@ const VesselAISDetails: React.FC = () => {
   );
 };
 
-type VesselDetailsContextType = {
-  cardVisible: boolean;
-  setCardVisible: React.Dispatch<React.SetStateAction<boolean>>;
-  detailsVisible: boolean;
-  setDetailsVisible: React.Dispatch<React.SetStateAction<boolean>>;
-};
-
-const VesselDetailsContext = React.createContext<VesselDetailsContextType | undefined>(undefined);
-export const useVesselDetails = (): VesselDetailsContextType => {
-  const context = React.useContext(VesselDetailsContext);
-  if(!context) throw new Error("no work");
-  return context;
-};
-
-export const VesselDetailsProvider: React.FC<{children: React.ReactNode}> = ({children} : any) => {
-  const [cardVisible, setCardVisible] = React.useState<boolean>(false);
-  const [detailsVisible, setDetailsVisible] = React.useState<boolean>(false);
-  return (
-    <VesselDetailsContext.Provider
-      value={{cardVisible,setCardVisible,detailsVisible,setDetailsVisible}} >
-      {children}
-    </VesselDetailsContext.Provider>
-  );
-};
-
 export const VesselDetailsScreen = () => {
 
   const {cardVisible, setCardVisible, detailsVisible, setDetailsVisible} = useVesselDetails();
@@ -103,9 +79,6 @@ export const VesselDetailsScreen = () => {
 
   return (
     <View>
-      {/* Just for getting the damn detail view showing */}
-      <Button title={'haha'} onPress={() => setCardVisible(!cardVisible)} />
-
       {cardVisible && (
         <View style={styles.vesselCard}>
 

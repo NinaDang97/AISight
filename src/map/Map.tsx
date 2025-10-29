@@ -9,7 +9,7 @@ import {
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { Button } from 'react-native';
 import { addPointLayer, defaultStyle } from './map-styles/styles';
-import { useVesselDetails } from '../screens/VesselDetailsScreen';
+import { useVesselDetails } from '../components/contexts/VesselDetailsContext';
 
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
@@ -17,7 +17,7 @@ const cameraInitStop: CameraStop = {
 };
 
 const Map = () => {
-  const {cardVisible, setCardVisible, detailsVisible, setDetailsVisible} = useVesselDetails();
+  const { setCardVisible } = useVesselDetails();
   const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(defaultStyle);
   const cameraRef = React.useRef<CameraRef>(null);
   const mapRef = React.useRef<MapViewRef>(null);
@@ -39,7 +39,7 @@ const Map = () => {
       'ships',
     ]);
     console.log(points);
-    setCardVisible(true);
+    if (points?.features.length !== 0) setCardVisible(true);
   };
 
   return (
