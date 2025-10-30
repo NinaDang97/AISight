@@ -1,12 +1,30 @@
-import React, {useState} from 'react';
-import { Button, View, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, TextInput, StatusBar } from 'react-native';
-import { Camera, CameraRef, CameraStop, MapView } from '@maplibre/maplibre-react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Camera,
+  CameraRef,
+  CameraStop,
+  MapView,
+  type MapViewRef,
+} from '@maplibre/maplibre-react-native';
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
-import { addPointLayer, getAppropriateMapStyle } from './map-styles/styles';
-import {LocationPermissionModal} from '../components/modals/PermissionModals';
-import {usePermissions} from '../hooks';
-import {RESULTS} from 'react-native-permissions';
-import {LocationService} from '../services/location';
+import { Button, View, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, TextInput, StatusBar, Pressable, Text } from 'react-native';
+import type {
+  Feature as GeoJSONFeature,
+  FeatureCollection as GeoJSONFeatureCollection,
+  Position as GeoJSONPosition,
+} from 'geojson';
+import {
+  addGnssMockLayer,
+  addShipLayer,
+  getAppropriateMapStyle,
+  removeGnssMockLayer,
+  removeShipLayer,
+} from './map-styles/styles';
+import { gnssFixDetails, type GnssFixDetail } from '../logs/native-module/gnss-mock';
+import { LocationPermissionModal } from '../components/modals/PermissionModals';
+import { usePermissions } from '../hooks';
+import { RESULTS } from 'react-native-permissions';
+import { LocationService } from '../services/location';
 
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
@@ -15,27 +33,95 @@ const portIcon = require('../../assets/images/icons/port-icon.png');
 const mapLayerIcon = require('../../assets/images/icons/map-layer-icon.png');
 const antennaIcon = require('../../assets/images/icons/antenna-icon.png');
 
+type SelectedGnss = {
+  coordinate: GeoJSONPosition;
+  detail: GnssFixDetail;
+};
+
+type RegionChangeProperties = {
+  zoomLevel?: number;
+  isUserInteraction?: boolean;
+};
+
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
   zoomLevel: 5,
 };
 
+const defaultCameraCenter = cameraInitStop.centerCoordinate as GeoJSONPosition;
+
 const Map = () => {
+  // Initialize map with appropriate style based on API key availability
   // Initialize map with appropriate style based on API key availability
   const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(getAppropriateMapStyle());
   const cameraRef = React.useRef<CameraRef>(null);
+  const mapRef = React.useRef<MapViewRef>(null);
+  const [isShipEnabled, setIsShipEnabled] = React.useState(false);
+  const [isGnssEnabled, setIsGnssEnabled] = useState(false);
+  const [selectedGnss, setSelectedGnss] = React.useState<SelectedGnss | null>(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
-  const [isGnssEnabled, setIsGnssEnabled] = useState(false);
 
   const {
     hasLocationPermission,
     requestLocation,
   } = usePermissions();
 
-  const addPoints = () => {
-    setMapStyle(prevStyle => addPointLayer(prevStyle));
-  };
+  useEffect(() => {
+    setMapStyle((prev) => {
+      let next = isGnssEnabled ? addGnssMockLayer(prev) : removeGnssMockLayer(prev);
+      next = isShipEnabled ? addShipLayer(next) : removeShipLayer(next);
+      return next;
+    });
+  }, [isGnssEnabled, isShipEnabled]);
+
+  const handleMapPress = useCallback(
+    async (feature: GeoJSONFeature) => {
+      if (!mapRef.current || !isGnssEnabled) {
+        setSelectedGnss(null);
+        return;
+      }
+      const screenPointX = Number(
+        (feature.properties as { screenPointX?: number } | undefined)?.screenPointX,
+      );
+      const screenPointY = Number(
+        (feature.properties as { screenPointY?: number } | undefined)?.screenPointY,
+      );
+      if (Number.isNaN(screenPointX) || Number.isNaN(screenPointY)) {
+        setSelectedGnss(null);
+        return;
+      }
+      try {
+        const collection: GeoJSONFeatureCollection =
+          await mapRef.current.queryRenderedFeaturesAtPoint(
+            [screenPointX, screenPointY],
+            undefined,
+            ['gnss-mock-points'],
+          );
+        const tappedFeature = collection.features[0];
+        if (!tappedFeature) {
+          setSelectedGnss(null);
+          return;
+        }
+        const fixIndex = Number(
+          (tappedFeature.properties as { fixIndex?: number } | undefined)?.fixIndex,
+        );
+        const detail = Number.isInteger(fixIndex) ? gnssFixDetails[fixIndex] : undefined;
+        if (detail) {
+          setSelectedGnss({
+            coordinate: detail.coordinate,
+            detail,
+          });
+        } else {
+          setSelectedGnss(null);
+        }
+      } catch (error) {
+        console.warn('Unable to resolve GNSS selection', error);
+        setSelectedGnss(null);
+      }
+    },
+    [isGnssEnabled],
+  );
 
   const resetCamera = () => {
     cameraRef.current?.setCamera(cameraInitStop);
@@ -61,7 +147,7 @@ const Map = () => {
       Alert.alert(
         'Location Error',
         'Unable to get your current location. Please make sure location services are enabled.',
-        [{text: 'OK'}]
+        [{ text: 'OK' }]
       );
     } finally {
       setIsLoadingLocation(false);
@@ -115,6 +201,7 @@ const Map = () => {
     // - Update map to show only selected vessel types
     // - Save filter preferences
     console.log('Vessel filter pressed');
+    setIsShipEnabled((prev) => !prev);
   };
 
   // Handle port button press
@@ -140,7 +227,6 @@ const Map = () => {
 
   // Handle GNSS toggle button press
   const handleGnssToggle = () => {
-    setIsGnssEnabled(!isGnssEnabled);
     // TODO: Implement GNSS functionality
     // - Toggle GNSS data overlay on map
     // - Show satellite positioning information
@@ -148,6 +234,7 @@ const Map = () => {
     // - Show positioning accuracy
     // - Save GNSS toggle state preference
     console.log('GNSS toggled:', !isGnssEnabled);
+    setIsGnssEnabled((prev) => !prev);
   };
 
   return (
@@ -157,7 +244,12 @@ const Map = () => {
         backgroundColor="transparent"
         barStyle="dark-content"
       />
-      <MapView style={styles.map} mapStyle={mapStyle}>
+      <MapView
+        ref={mapRef}
+        style={styles.map}
+        mapStyle={mapStyle}
+        onPress={handleMapPress}
+      >
         <Camera ref={cameraRef} defaultSettings={cameraInitStop} />
       </MapView>
 
@@ -250,10 +342,7 @@ const Map = () => {
         )}
       </TouchableOpacity>
 
-      <View style={styles.buttonContainer}>
-        <Button title="Reset Camera" onPress={resetCamera} />
-        <Button title="Show Points" onPress={addPoints} />
-      </View>
+      <Button title="Reset Camera" onPress={resetCamera} />
 
       {/* Location Permission Modal */}
       <LocationPermissionModal
@@ -261,9 +350,34 @@ const Map = () => {
         onContinue={handleContinue}
         onNotNow={handleNotNow}
       />
+
+      {selectedGnss && (
+        <View style={styles.gnssDetailCard}>
+          <View style={styles.gnssDetailHeader}>
+            <Text style={styles.gnssDetailTitle}>GNSS fix #{selectedGnss.detail.fixIndex}</Text>
+            <Pressable onPress={() => setSelectedGnss(null)} hitSlop={10}>
+              <Text style={styles.gnssDetailClose}>Close</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.gnssDetailMeta}>Time: {selectedGnss.detail.timestamp}</Text>
+          <Text style={styles.gnssDetailMeta}>
+            Speed: {selectedGnss.detail.speedKts} kts ({selectedGnss.detail.speedMps} m/s)
+          </Text>
+          <Text style={styles.gnssDetailMeta}>
+            Satellites used: {selectedGnss.detail.status.satellitesUsedInFix}
+          </Text>
+          <Text style={styles.gnssDetailMeta}>
+            Average Cn0: {selectedGnss.detail.status.averageSignalToNoiseRatio}
+          </Text>
+          <Text style={styles.gnssDetailMeta}>Sea state: {selectedGnss.detail.seaState}</Text>
+          <Text style={styles.gnssDetailMeta}>Nav status: {selectedGnss.detail.navStatus}</Text>
+        </View>
+      )}
     </View>
   );
 };
+
+export default Map;
 
 const styles = StyleSheet.create({
   container: {
@@ -272,14 +386,53 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  buttonContainer: {
+  iconContainer: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    flexDirection: 'column',
+  },
+  iconButton: {
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  icon: {
+    width: 48,
+    height: 48,
+  },
+  gnssDetailCard: {
     position: 'absolute',
     bottom: 20,
-    left: 0,
-    right: 0,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  gnssDetailHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  gnssDetailTitle: {
+    color: '#f8fafc',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  gnssDetailClose: {
+    color: '#94a3b8',
+    fontSize: 14,
+  },
+  gnssDetailMeta: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    marginTop: 4,
   },
   topControlsContainer: {
     position: 'absolute',
@@ -300,7 +453,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
@@ -325,7 +478,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
@@ -342,7 +495,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
@@ -362,7 +515,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
@@ -382,7 +535,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
@@ -405,7 +558,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
@@ -415,5 +568,3 @@ const styles = StyleSheet.create({
     height: 24,
   },
 });
-
-export default Map;
