@@ -13,6 +13,7 @@ import {
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { addPointLayers, getAppropriateMapStyle, updateShipData } from './map-styles/styles';
 import {
+  fetchMetadataForAllVessels,
   fetchVessels,
   FinTrafficVesselFC,
   FinTrafficVesselMetadata,
@@ -31,13 +32,25 @@ const Map = () => {
   const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(
     addPointLayers(getAppropriateMapStyle()),
   );
-  const [vesselMetadata, setVesselMetadata] = React.useState<VesselMetadataCollection>(); // TODO: load all metadata to separate state
+  const [vesselMetadataState, setVesselMetadataState] = React.useState<VesselMetadataCollection>(); // TODO: load all metadata to separate state
   const cameraRef = React.useRef<CameraRef>(null);
   const mapRef = React.useRef<MapViewRef>(null);
   const userLocationRef = React.useRef<UserLocationRef>(null);
 
+  // Update shipdata on interval basis. This is also done when the map is moved
   React.useEffect(() => {
     let mounted = true;
+
+    // Fetch metadata for all vessels on
+    const initMetadata = async () => {
+      try {
+        const metadata = await fetchMetadataForAllVessels();
+        setVesselMetadataState(metadata);
+      } catch (err) {
+        console.warn('Failed to load vessel metadata on mount', err);
+      }
+    };
+    initMetadata();
 
     const tick = async () => {
       try {
@@ -65,7 +78,17 @@ const Map = () => {
 
     const url = makeAisApiUrl(currentCenter, visibleBounds);
     const vessels: VesselFC = await fetchVessels(url);
+
+    // Populate the metadata property
+    vessels.features.forEach(
+      feature =>
+        (feature.properties.vesselMetadata = vesselMetadataState?.metadataRecords.get(
+          feature.mmsi,
+        )),
+    );
+
     console.log(vessels);
+
     setMapStyle(prev => updateShipData(prev, vessels));
   };
 

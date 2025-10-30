@@ -92,7 +92,7 @@ export const addPointLayers = (prevStyle: StyleSpecification): StyleSpecificatio
       ...prevStyle.sources,
       'plain-point': plainPointSource,
     },
-    layers: [...prevStyle.layers, shipLayer, plainPointLayer, shipTextLayer],
+    layers: [...prevStyle.layers, shipLayer, passengerShipLayer, plainPointLayer, shipTextLayer],
   };
 };
 
@@ -145,8 +145,20 @@ const shipLayer: CircleLayerSpecification = {
   id: 'ships',
   type: 'circle',
   source: 'fintraffic-ships',
+  filter: ['!=', ['get', 'shipType', ['get', 'vesselMetadata']], 60],
   paint: {
     'circle-color': '#0aa',
+    'circle-stroke-width': 2,
+  },
+};
+
+const passengerShipLayer: CircleLayerSpecification = {
+  id: 'passenger-ships',
+  type: 'circle',
+  source: 'fintraffic-ships',
+  filter: ['==', ['get', 'shipType', ['get', 'vesselMetadata']], 60],
+  paint: {
+    'circle-color': '#f00',
     'circle-stroke-width': 2,
   },
 };
