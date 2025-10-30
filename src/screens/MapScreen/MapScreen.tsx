@@ -98,7 +98,7 @@ export const MapScreen: React.FC = () => {
         {/* Vessel Info Card */}
         {/* Legend Section */}
 
-        {/* Notification Permission Modal */}
+        {/* Notification Per§ission Modal */}
         <NotificationPermissionModal
           visible={showNotificationModal}
           onAllow={handleAllowNotification}

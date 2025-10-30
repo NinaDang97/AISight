@@ -17,11 +17,9 @@ import {
   Camera,
   CameraRef,
   CameraStop,
-  LocationManager,
   MapView,
   MapViewRef,
   UserLocation,
-  UserLocationRef,
 } from '@maplibre/maplibre-react-native';
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type {
@@ -40,6 +38,7 @@ import {
 import {
   addGnssMockLayer,
   addShipLayer,
+  defaultStyle,
   getAppropriateMapStyle,
   removeGnssMockLayer,
   removeShipLayer,
@@ -50,6 +49,7 @@ import { LocationPermissionModal } from '../components/modals/PermissionModals';
 import { usePermissions } from '../hooks';
 import { RESULTS } from 'react-native-permissions';
 import { LocationService } from '../services/location';
+import { logger } from '../utils/logger';
 
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
@@ -77,8 +77,7 @@ const defaultCameraCenter = cameraInitStop.centerCoordinate as GeoJSONPosition;
 
 const Map = () => {
   // Initialize map with appropriate style based on API key availability
-  // Initialize map with appropriate style based on API key availability
-  const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(getAppropriateMapStyle());
+  const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(defaultStyle);
   const cameraRef = React.useRef<CameraRef>(null);
   const mapRef = React.useRef<MapViewRef>(null);
   const [isShipEnabled, setIsShipEnabled] = React.useState(false);
@@ -86,17 +85,22 @@ const Map = () => {
   const [selectedGnss, setSelectedGnss] = React.useState<SelectedGnss | null>(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
-  const [vesselMetadataState, setVesselMetadataState] = React.useState<VesselMetadataCollection>();
+  const [vesselMetadataState, setVesselMetadataState] =
+    React.useState<VesselMetadataCollection | null>(null);
 
   const { hasLocationPermission, requestLocation } = usePermissions();
 
   useEffect(() => {
-    let mounted = true;
     setMapStyle(prev => {
       let next = isGnssEnabled ? addGnssMockLayer(prev) : removeGnssMockLayer(prev);
       next = isShipEnabled ? addShipLayer(next) : removeShipLayer(next);
       return next;
     });
+  }, [isGnssEnabled, isShipEnabled]);
+
+  useEffect(() => {
+    let mounted = true;
+    setMapStyle(getAppropriateMapStyle());
 
     const initMetadata = async () => {
       try {
@@ -117,19 +121,18 @@ const Map = () => {
     };
 
     tick();
-    const id = setInterval(tick, 5_000);
+    const id = setInterval(tick, 15_000);
 
     return () => {
       mounted = false;
       clearInterval(id);
     };
-  }, [isGnssEnabled, isShipEnabled]);
+  }, []);
 
   const updateVesselData = async () => {
     const currentCenter = await mapRef.current?.getCenter();
-    const visibleBounds = await mapRef.current?.getVisibleBounds();
-
     if (!currentCenter) throw new Error('Error getting map center');
+    const visibleBounds = await mapRef.current?.getVisibleBounds();
     if (!visibleBounds) throw new Error('Error getting map bounds');
 
     const url = makeAisApiUrl(currentCenter, visibleBounds);
@@ -143,7 +146,7 @@ const Map = () => {
         )),
     );
 
-    console.log(vessels);
+    logger.info(`Vessels updated`);
 
     setMapStyle(prev => updateShipData(prev, vessels));
   };
@@ -319,10 +322,10 @@ const Map = () => {
         mapStyle={mapStyle}
         onPress={handleMapPress}
         attributionEnabled={false}
-        onRegionDidChange={() => updateVesselData()}
+        onRegionDidChange={updateVesselData}
       >
         <Camera ref={cameraRef} defaultSettings={cameraInitStop} />
-        {/*<UserLocation ref={userLocationRef} renderMode="native" androidRenderMode="compass" />*/}
+        <UserLocation renderMode="native" androidRenderMode="compass" />
       </MapView>
 
       {/* Search Bar and Vessel Filter */}

@@ -80,16 +80,6 @@ export const getAppropriateMapStyle = (): StyleSpecification => {
 
 // ===== Layer Addition Functions =====
 
-export const addPointLayers = (prevStyle: StyleSpecification): StyleSpecification => {
-  return {
-    ...prevStyle,
-    sources: {
-      ...prevStyle.sources,
-    },
-    layers: [...prevStyle.layers, shipLayer, passengerShipLayer, plainPointLayer, shipTextLayer],
-  };
-};
-
 export const addShipLayer = (prevStyle: StyleSpecification): StyleSpecification => {
   const baseStyle = removeShipLayer(prevStyle);
 
@@ -97,10 +87,15 @@ export const addShipLayer = (prevStyle: StyleSpecification): StyleSpecification 
     ...baseStyle,
     sources: {
       ...(baseStyle.sources ?? {}),
-      'fintraffic-ships': shipLayer,
       'plain-point': plainPointSource,
     },
-    layers: [...(baseStyle.layers ?? []), shipLayer, plainPointLayer, shipTextLayer],
+    layers: [
+      ...(baseStyle.layers ?? []),
+      shipLayer,
+      passengerShipLayer,
+      plainPointLayer,
+      shipTextLayer,
+    ],
   };
 };
 
@@ -108,7 +103,10 @@ export const removeShipLayer = (prevStyle: StyleSpecification): StyleSpecificati
   const sources = baseStyleSourcesWithoutShips(prevStyle.sources);
   const layers = (prevStyle.layers ?? []).filter(
     layer =>
-      layer.id !== shipLayer.id && layer.id !== plainPointLayer.id && layer.id !== shipTextLayer.id,
+      layer.id !== shipLayer.id &&
+      layer.id !== passengerShipLayer.id &&
+      layer.id !== plainPointLayer.id &&
+      layer.id !== shipTextLayer.id,
   );
 
   return {
