@@ -5,86 +5,55 @@ import { colors, typography, spacing } from '../../styles';
 import { useVesselDetails } from '../../components/contexts/VesselDetailsContext';
 
 const VesselAISDetails: React.FC = () => {
+  const { vesselData } = useVesselDetails();
+  const properties = vesselData?.properties;
+  const coordinates = vesselData?.geometry?.coordinates;
+  if (!properties || !coordinates) return <Text>Loading...</Text>
   return (
     <View style={styles.detailsView}>
       <View style={styles.detailRow}>
         <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Datetime UTC</Text>
-        <Text style={typography.body}>02:00</Text>
+        <Text style={typography.body}>{new Date().toUTCString()}</Text>
       </View>
       <View style={styles.detailRow}>
         <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Latitude</Text>
-        <Text style={typography.body}>63.12345</Text>
+        <Text style={typography.body}>{coordinates[1]}</Text>
       </View>
       <View style={styles.detailRow}>
         <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Longitude</Text>
-        <Text style={typography.body}>10.12345</Text>
+        <Text style={typography.body}>{coordinates[0]}</Text>
       </View>
       <View style={styles.detailRow}>
         <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>IMO / MMSI</Text>
-        <Text style={typography.body}>257465900</Text>
+        <Text style={typography.body}>{properties.mmsi}</Text>
       </View>
       <View style={styles.detailRow}>
         <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Heading</Text>
-        <Text style={typography.body}>143°</Text>
-      </View>
-      <View style={styles.detailRow}>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
-          Navigation status (NAVSTAT)
-        </Text>
-        <Text style={typography.body}>15</Text>
-      </View>
-      <View style={styles.detailRow}>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Vessel Name</Text>
-        <Text style={typography.body}>MV Ocean Explorer</Text>
-      </View>
-      <View style={styles.detailRow}>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Vessel type</Text>
-        <Text style={typography.body}>60</Text>
-      </View>
-      <View style={styles.detailRow}>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Callsign</Text>
-        <Text style={typography.body}>MVOE</Text>
-      </View>
-      <View style={styles.detailRow}>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Length</Text>
-        <Text style={typography.body}>50 m</Text>
-      </View>
-      <View style={styles.detailRow}>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Width</Text>
-        <Text style={typography.body}>15 m</Text>
-      </View>
-      <View style={styles.detailRow}>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Draught</Text>
-        <Text style={typography.body}>0 m</Text>
-      </View>
-      <View style={styles.detailRow}>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Destination</Text>
-        <Text style={typography.body}>Helsinki</Text>
-      </View>
-      <View style={styles.detailRow}>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>ETA</Text>
-        <Text style={typography.body}>05:00</Text>
+        <Text style={typography.body}>{properties.heading}°</Text>
       </View>
     </View>
   );
 };
 
 export const VesselDetailsScreen = () => {
-
-  const {cardVisible, setCardVisible, detailsVisible, setDetailsVisible} = useVesselDetails();
+  const { cardVisible, setCardVisible, detailsVisible, setDetailsVisible, vesselData } = useVesselDetails();
+  const properties = vesselData?.properties;
+  const coordinates = vesselData?.geometry?.coordinates;
 
   const changeText = () => {
     return detailsVisible ? 'Hide Details' : 'View Details';
   };
 
+  if (!vesselData) return null;
+  if (!properties || !coordinates) return <Text>Loading...</Text>
   return (
     <View>
       {cardVisible && (
         <View style={styles.vesselCard}>
 
           <View style={styles.cardHeader}>
-            <Text style={typography.heading4}>MV Ocean Explorer</Text>
-            <Pressable onPress={() => {setCardVisible(false); setDetailsVisible(false);}}>
+            <Text style={typography.heading4}>MMSI {properties.mmsi}</Text>
+            <Pressable onPress={() => { setCardVisible(false); setDetailsVisible(false); }}>
               <Text>Close</Text>
             </Pressable>
           </View>
@@ -95,17 +64,17 @@ export const VesselDetailsScreen = () => {
 
           <View style={styles.detailRow}>
             <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Speed:</Text>
-            <Text style={typography.body}>12.5 knots</Text>
+            <Text style={typography.body}>{properties.sog || 0} knots</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Course:</Text>
-            <Text style={typography.body}>245°</Text>
+            <Text style={typography.body}>{properties.cog || 0}°</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
               Last Update:
             </Text>
-            <Text style={typography.body}>2 min ago</Text>
+            <Text style={typography.body}>{new Date(properties?.timestampExternal).toUTCString()}</Text>
           </View>
 
           {detailsVisible && <VesselAISDetails />}

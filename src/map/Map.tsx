@@ -17,7 +17,7 @@ const cameraInitStop: CameraStop = {
 };
 
 const Map = () => {
-  const { setCardVisible } = useVesselDetails();
+  const { setCardVisible, setVesselData } = useVesselDetails();
   const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(defaultStyle);
   const cameraRef = React.useRef<CameraRef>(null);
   const mapRef = React.useRef<MapViewRef>(null);
@@ -38,8 +38,11 @@ const Map = () => {
     const points = await mapRef.current?.queryRenderedFeaturesAtPoint([pointX, pointY], undefined, [
       'ships',
     ]);
-    console.log(points);
-    if (points?.features.length !== 0) setCardVisible(true);
+
+    if (points?.features.length !== 0) {
+      setCardVisible(true);
+      setVesselData(points?.features[0]);
+    }
   };
 
   return (
