@@ -103,7 +103,7 @@ const Map = () => {
         style={styles.map}
         mapStyle={mapStyle}
         attributionEnabled={false}
-        onRegionWillChange={() => updateVesselData()}
+        onRegionDidChange={() => updateVesselData()}
       >
         <Camera ref={cameraRef} defaultSettings={cameraInitStop} />
         <UserLocation ref={userLocationRef} renderMode="native" androidRenderMode="compass" />
