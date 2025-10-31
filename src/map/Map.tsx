@@ -1,30 +1,55 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  Button,
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  Alert,
+  ActivityIndicator,
+  TextInput,
+  StatusBar,
+  Pressable,
+  Text,
+} from 'react-native';
+
+import {
   Camera,
   CameraRef,
   CameraStop,
   MapView,
-  type MapViewRef,
+  MapViewRef,
+  UserLocation,
 } from '@maplibre/maplibre-react-native';
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
-import { Button, View, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, TextInput, StatusBar, Pressable, Text } from 'react-native';
 import type {
   Feature as GeoJSONFeature,
   FeatureCollection as GeoJSONFeatureCollection,
   Position as GeoJSONPosition,
 } from 'geojson';
+
+import {
+  fetchMetadataForAllVessels,
+  fetchVessels,
+  makeAisApiUrl,
+  VesselFC,
+  VesselMetadataCollection,
+} from './map-utils';
 import {
   addGnssMockLayer,
   addShipLayer,
+  defaultStyle,
   getAppropriateMapStyle,
   removeGnssMockLayer,
   removeShipLayer,
+  updateShipData,
 } from './map-styles/styles';
 import { gnssFixDetails, type GnssFixDetail } from '../logs/native-module/gnss-mock';
 import { LocationPermissionModal } from '../components/modals/PermissionModals';
 import { usePermissions } from '../hooks';
 import { RESULTS } from 'react-native-permissions';
 import { LocationService } from '../services/location';
+import { logger } from '../utils/logger';
 
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
@@ -45,15 +70,14 @@ type RegionChangeProperties = {
 
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
-  zoomLevel: 5,
+  zoomLevel: 10,
 };
 
 const defaultCameraCenter = cameraInitStop.centerCoordinate as GeoJSONPosition;
 
 const Map = () => {
   // Initialize map with appropriate style based on API key availability
-  // Initialize map with appropriate style based on API key availability
-  const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(getAppropriateMapStyle());
+  const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(defaultStyle);
   const cameraRef = React.useRef<CameraRef>(null);
   const mapRef = React.useRef<MapViewRef>(null);
   const [isShipEnabled, setIsShipEnabled] = React.useState(false);
@@ -61,19 +85,71 @@ const Map = () => {
   const [selectedGnss, setSelectedGnss] = React.useState<SelectedGnss | null>(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [vesselMetadataState, setVesselMetadataState] =
+    React.useState<VesselMetadataCollection | null>(null);
 
-  const {
-    hasLocationPermission,
-    requestLocation,
-  } = usePermissions();
+  const { hasLocationPermission, requestLocation } = usePermissions();
 
   useEffect(() => {
-    setMapStyle((prev) => {
+    setMapStyle(prev => {
       let next = isGnssEnabled ? addGnssMockLayer(prev) : removeGnssMockLayer(prev);
       next = isShipEnabled ? addShipLayer(next) : removeShipLayer(next);
       return next;
     });
   }, [isGnssEnabled, isShipEnabled]);
+
+  useEffect(() => {
+    let mounted = true;
+    setMapStyle(getAppropriateMapStyle());
+
+    const initMetadata = async () => {
+      try {
+        const metadata = await fetchMetadataForAllVessels();
+        setVesselMetadataState(metadata);
+      } catch (err) {
+        console.warn('Failed to load vessel metadata on mount', err);
+      }
+    };
+    initMetadata();
+
+    const tick = async () => {
+      try {
+        updateVesselData();
+      } catch (err) {
+        console.warn('Periodic ship update failed', err);
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, 15_000);
+
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  const updateVesselData = async () => {
+    const currentCenter = await mapRef.current?.getCenter();
+    if (!currentCenter) throw new Error('Error getting map center');
+    const visibleBounds = await mapRef.current?.getVisibleBounds();
+    if (!visibleBounds) throw new Error('Error getting map bounds');
+
+    const url = makeAisApiUrl(currentCenter, visibleBounds);
+    const vessels: VesselFC = await fetchVessels(url);
+
+    // Populate the metadata property
+    vessels.features.forEach(
+      feature =>
+        (feature.properties.vesselMetadata = vesselMetadataState?.metadataRecords.get(
+          feature.mmsi,
+        )),
+    );
+
+    logger.info(`Vessels updated`);
+
+    setMapStyle(prev => updateShipData(prev, vessels));
+  };
 
   const handleMapPress = useCallback(
     async (feature: GeoJSONFeature) => {
@@ -147,7 +223,7 @@ const Map = () => {
       Alert.alert(
         'Location Error',
         'Unable to get your current location. Please make sure location services are enabled.',
-        [{ text: 'OK' }]
+        [{ text: 'OK' }],
       );
     } finally {
       setIsLoadingLocation(false);
@@ -201,7 +277,7 @@ const Map = () => {
     // - Update map to show only selected vessel types
     // - Save filter preferences
     console.log('Vessel filter pressed');
-    setIsShipEnabled((prev) => !prev);
+    setIsShipEnabled(prev => !prev);
   };
 
   // Handle port button press
@@ -234,36 +310,28 @@ const Map = () => {
     // - Show positioning accuracy
     // - Save GNSS toggle state preference
     console.log('GNSS toggled:', !isGnssEnabled);
-    setIsGnssEnabled((prev) => !prev);
+    setIsGnssEnabled(prev => !prev);
   };
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle="dark-content"
-      />
+      <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
       <MapView
         ref={mapRef}
         style={styles.map}
         mapStyle={mapStyle}
         onPress={handleMapPress}
+        attributionEnabled={false}
+        onRegionDidChange={updateVesselData}
       >
         <Camera ref={cameraRef} defaultSettings={cameraInitStop} />
+        <UserLocation renderMode="native" androidRenderMode="compass" />
       </MapView>
 
       {/* Search Bar and Vessel Filter */}
       <View style={styles.topControlsContainer}>
-        <TouchableOpacity
-          style={styles.searchBar}
-          onPress={handleSearchPress}
-          activeOpacity={0.7}>
-          <Image
-            source={searchIcon}
-            style={styles.searchIcon}
-            resizeMode="contain"
-          />
+        <TouchableOpacity style={styles.searchBar} onPress={handleSearchPress} activeOpacity={0.7}>
+          <Image source={searchIcon} style={styles.searchIcon} resizeMode="contain" />
           <TextInput
             style={styles.searchInput}
             placeholder="Search..."
@@ -277,24 +345,14 @@ const Map = () => {
         <TouchableOpacity
           style={styles.vesselButton}
           onPress={handleVesselFilterPress}
-          activeOpacity={0.8}>
-          <Image
-            source={vesselIcon}
-            style={styles.vesselIcon}
-            resizeMode="contain"
-          />
+          activeOpacity={0.8}
+        >
+          <Image source={vesselIcon} style={styles.vesselIcon} resizeMode="contain" />
         </TouchableOpacity>
 
         {/* Port Button */}
-        <TouchableOpacity
-          style={styles.portButton}
-          onPress={handlePortPress}
-          activeOpacity={0.8}>
-          <Image
-            source={portIcon}
-            style={styles.portIcon}
-            resizeMode="contain"
-          />
+        <TouchableOpacity style={styles.portButton} onPress={handlePortPress} activeOpacity={0.8}>
+          <Image source={portIcon} style={styles.portIcon} resizeMode="contain" />
         </TouchableOpacity>
       </View>
 
@@ -302,27 +360,18 @@ const Map = () => {
       <TouchableOpacity
         style={styles.mapLayerButton}
         onPress={handleMapLayerPress}
-        activeOpacity={0.8}>
-        <Image
-          source={mapLayerIcon}
-          style={styles.mapLayerIcon}
-          resizeMode="contain"
-        />
+        activeOpacity={0.8}
+      >
+        <Image source={mapLayerIcon} style={styles.mapLayerIcon} resizeMode="contain" />
       </TouchableOpacity>
 
       {/* GNSS Toggle Button */}
       <TouchableOpacity
-        style={[
-          styles.gnssButton,
-          isGnssEnabled && styles.gnssButtonActive
-        ]}
+        style={[styles.gnssButton, isGnssEnabled && styles.gnssButtonActive]}
         onPress={handleGnssToggle}
-        activeOpacity={0.8}>
-        <Image
-          source={antennaIcon}
-          style={styles.gnssIcon}
-          resizeMode="contain"
-        />
+        activeOpacity={0.8}
+      >
+        <Image source={antennaIcon} style={styles.gnssIcon} resizeMode="contain" />
       </TouchableOpacity>
 
       {/* Navigation Button */}
@@ -330,15 +379,12 @@ const Map = () => {
         style={styles.navigationButton}
         onPress={handleNavigationPress}
         activeOpacity={0.8}
-        disabled={isLoadingLocation}>
+        disabled={isLoadingLocation}
+      >
         {isLoadingLocation ? (
           <ActivityIndicator size="small" color="#5856D6" />
         ) : (
-          <Image
-            source={navigationIcon}
-            style={styles.navigationIcon}
-            resizeMode="contain"
-          />
+          <Image source={navigationIcon} style={styles.navigationIcon} resizeMode="contain" />
         )}
       </TouchableOpacity>
 
