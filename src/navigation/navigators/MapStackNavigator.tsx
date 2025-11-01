@@ -1,9 +1,10 @@
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
 import { Routes, MapStackParamList } from '../routes';
 
 // Import screens
 import { MapScreen } from '../../screens/MapScreen';
+import { SearchScreen } from '../../screens/SearchScreen';
 
 const Stack = createStackNavigator<MapStackParamList>();
 
@@ -32,6 +33,29 @@ export const MapStackNavigator: React.FC = () => {
       <Stack.Screen
         name={Routes.Map.MAP}
         component={MapScreen}
+      />
+      <Stack.Screen
+        name={Routes.Map.SEARCH}
+        component={SearchScreen}
+        options={{
+          headerShown: false,
+          cardStyle: { backgroundColor: '#2C2C2E' },
+          ...TransitionPresets.SlideFromRightIOS,
+          transitionSpec: {
+            open: {
+              animation: 'timing',
+              config: {
+                duration: 250,
+              },
+            },
+            close: {
+              animation: 'timing',
+              config: {
+                duration: 200,
+              },
+            },
+          },
+        }}
       />
     </Stack.Navigator>
   );

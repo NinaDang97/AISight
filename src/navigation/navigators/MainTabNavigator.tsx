@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Routes, MainTabParamList } from '../routes';
 import { colors } from '../../styles/colors';
 import { MapStackNavigator } from './MapStackNavigator';
@@ -91,11 +92,25 @@ export const MainTabNavigator: React.FC = () => {
       <Tab.Screen
         name={Routes.Tabs.MAP}
         component={MapStackNavigator}
-        options={{
+        options={({ route }) => ({
           tabBarIcon: ({ focused, size }) => (
             <TabIcon source={icons.map} focused={focused} size={size} />
           ),
-        }}
+          // Hide tab bar when on Search screen
+          tabBarStyle: ((routeName) => {
+            if (routeName === Routes.Map.SEARCH) {
+              return { display: 'none' };
+            }
+            return {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.border,
+              borderTopWidth: 1,
+              paddingBottom: 8,
+              paddingTop: 8,
+              height: 60,
+            };
+          })(getFocusedRouteNameFromRoute(route)),
+        })}
       />
       <Tab.Screen
         name={Routes.Tabs.GNSS}

@@ -28,6 +28,7 @@ export const Routes = {
   // Map stack routes
   Map: {
     MAP: 'Map',
+    SEARCH: 'Search',
   },
 
   // GNSS stack routes
@@ -70,6 +71,7 @@ export type OnboardingStackParamList = {
 
 export type MapStackParamList = {
   [Routes.Map.MAP]: undefined;
+  [Routes.Map.SEARCH]: undefined;
 };
 
 export type GnssStackParamList = {
