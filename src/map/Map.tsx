@@ -79,7 +79,11 @@ const cameraInitStop: CameraStop = {
 
 const defaultCameraCenter = cameraInitStop.centerCoordinate as GeoJSONPosition;
 
-const Map = () => {
+interface MapProps {
+  onSearchPress?: () => void;
+}
+
+const Map: React.FC<MapProps> = ({ onSearchPress }) => {
   // Initialize map with appropriate style based on API key availability
   const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(defaultStyle);
   const cameraRef = React.useRef<CameraRef>(null);
@@ -278,11 +282,9 @@ const Map = () => {
 
   // Handle search input
   const handleSearchPress = () => {
-    // TODO: Implement search functionality
-    // - Search for vessels by name/MMSI
-    // - Search for locations/coordinates
-    // - Show search results dropdown
-    console.log('Search pressed');
+    if (onSearchPress) {
+      onSearchPress();
+    }
   };
 
   // Handle vessel filter button press

@@ -1,5 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { SafeAreaWrapper } from '../../components/common/SafeAreaWrapper';
 import { Button } from '../../components/common/Button';
 import { colors, typography, spacing } from '../../styles';
@@ -7,6 +9,9 @@ import Map from '../../map/Map';
 import {NotificationPermissionModal} from '../../components/modals/PermissionModals';
 import {usePermissions} from '../../hooks';
 import {RESULTS} from 'react-native-permissions';
+import { MapStackParamList, Routes } from '../../navigation/routes';
+
+type MapScreenNavigationProp = StackNavigationProp<MapStackParamList, typeof Routes.Map.MAP>;
 
 const MapControls: React.FC = () => (
   <View style={styles.controlsOverlay}>
@@ -52,6 +57,7 @@ const LegendSection: React.FC = () => (
 );
 
 export const MapScreen: React.FC = () => {
+  const navigation = useNavigation<MapScreenNavigationProp>();
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const {
     shouldShowNotificationPrompt,
@@ -89,16 +95,20 @@ export const MapScreen: React.FC = () => {
     console.log('Notification permission denied');
   };
 
+  const handleSearchPress = () => {
+    navigation.navigate(Routes.Map.SEARCH);
+  };
+
   return (
     <SafeAreaWrapper backgroundColor="transparent" barStyle="dark-content" edges={['bottom', 'left', 'right']}>
       <View style={styles.container}>
-        <Map />
+        <Map onSearchPress={handleSearchPress} />
 
         {/* Map Controls Overlay */}
         {/* Vessel Info Card */}
         {/* Legend Section */}
 
-        {/* Notification Per§ission Modal */}
+        {/* Notification Permission Modal */}
         <NotificationPermissionModal
           visible={showNotificationModal}
           onAllow={handleAllowNotification}
