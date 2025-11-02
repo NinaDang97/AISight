@@ -63,9 +63,13 @@ type SelectedGnss = {
   detail: GnssFixDetail;
 };
 
-type RegionChangeProperties = {
-  zoomLevel?: number;
-  isUserInteraction?: boolean;
+type RegionPayload = {
+  zoomLevel: number;
+  heading: number;
+  animated: boolean;
+  isUserInteraction: boolean;
+  visibleBounds: [northEast: GeoJSONPosition, southWest: GeoJSONPosition];
+  pitch: number;
 };
 
 const cameraInitStop: CameraStop = {
@@ -85,6 +89,7 @@ const Map = () => {
   const [selectedGnss, setSelectedGnss] = React.useState<SelectedGnss | null>(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [isFollowingUser, setIsFollowingUser] = useState(false);
   const [vesselMetadataState, setVesselMetadataState] =
     React.useState<VesselMetadataCollection | null>(null);
 
@@ -151,6 +156,14 @@ const Map = () => {
     setMapStyle(prev => updateShipData(prev, vessels));
   };
 
+  // Handle user interaction with map - disable following mode when user scrolls
+  const handleRegionWillChange = useCallback((feature: GeoJSONFeature<GeoJSON.Point, RegionPayload>) => {
+    // If user manually interacts with the map, disable following mode
+    if (feature.properties?.isUserInteraction) {
+      setIsFollowingUser(false);
+    }
+  }, []);
+
   const handleMapPress = useCallback(
     async (feature: GeoJSONFeature) => {
       if (!mapRef.current || !isGnssEnabled) {
@@ -208,6 +221,9 @@ const Map = () => {
     setIsLoadingLocation(true);
     try {
       const position = await LocationService.getCurrentPosition();
+
+      // Enable following mode
+      setIsFollowingUser(true);
 
       // Center camera on user location with animation
       cameraRef.current?.setCamera({
@@ -322,10 +338,11 @@ const Map = () => {
         mapStyle={mapStyle}
         onPress={handleMapPress}
         attributionEnabled={false}
+        onRegionWillChange={handleRegionWillChange}
         onRegionDidChange={updateVesselData}
       >
-        <Camera ref={cameraRef} defaultSettings={cameraInitStop} />
-        <UserLocation renderMode="native" androidRenderMode="compass" />
+        <Camera ref={cameraRef} defaultSettings={cameraInitStop} followUserLocation={isFollowingUser} />
+        {hasLocationPermission && <UserLocation renderMode="native" androidRenderMode="compass" />}
       </MapView>
 
       {/* Search Bar and Vessel Filter */}
