@@ -63,23 +63,26 @@ export const GnssScreen: React.FC = () => {
   // Generate unique satellite IDs to fix duplicate key warnings
   const generateUniqueSatelliteId = (system: string, existingIds: Set<string>) => {
     let attempts = 0;
-    while (attempts < 50) { // Prevent infinite loop
+    while (attempts < 50) {
+      // Prevent infinite loop
       const idNumber = Math.floor(Math.random() * 32);
       const id = `${system.charAt(0)}${idNumber.toString().padStart(2, '0')}`;
-      
+
       if (!existingIds.has(id)) {
         return id;
       }
       attempts++;
     }
     // Fallback: add timestamp to ensure uniqueness
-    return `${system.charAt(0)}${Math.floor(Math.random() * 32).toString().padStart(2, '0')}_${Date.now()}`;
+    return `${system.charAt(0)}${Math.floor(Math.random() * 32)
+      .toString()
+      .padStart(2, '0')}_${Date.now()}`;
   };
 
   // Generate realistic mock data
   const generateMockData = () => {
     setIsLoading(true);
-    
+
     // Simulate API delay
     setTimeout(() => {
       const systems = ['GPS', 'GLONASS', 'Galileo', 'BeiDou'];
@@ -89,18 +92,18 @@ export const GnssScreen: React.FC = () => {
 
       // Generate 8-12 random satellites
       const satelliteCount = Math.floor(Math.random() * 5) + 8;
-      
+
       for (let i = 0; i < satelliteCount; i++) {
         const system = systems[Math.floor(Math.random() * systems.length)];
         const dbValue = Math.floor(Math.random() * 20) + 25; // 25-45 dB
         const id = generateUniqueSatelliteId(system, usedIds);
         usedIds.add(id);
-        
+
         newSignals.push({
           id,
           system,
           strength: `${dbValue} dB-Hz`,
-          dbValue
+          dbValue,
         });
 
         // Only add to details if we have room (max 6 for display)
@@ -110,7 +113,7 @@ export const GnssScreen: React.FC = () => {
             elevation: `${Math.floor(Math.random() * 90)}°`,
             azimuth: `${Math.floor(Math.random() * 360)}°`,
             cno: dbValue.toString(),
-            dbValue
+            dbValue,
           });
         }
       }
@@ -150,16 +153,20 @@ export const GnssScreen: React.FC = () => {
 
     // Simple CSV export simulation
     const headers = 'Satellite ID,System,Signal Strength (dB-Hz),Elevation,Azimuth\n';
-    const rows = satelliteSignals.map(signal => {
-      const detail = satelliteDetails.find(d => d.id === signal.id);
-      return `"${signal.id}","${signal.system}","${signal.strength}","${detail?.elevation || 'N/A'}","${detail?.azimuth || 'N/A'}"`;
-    }).join('\n');
-    
+    const rows = satelliteSignals
+      .map(signal => {
+        const detail = satelliteDetails.find(d => d.id === signal.id);
+        return `"${signal.id}","${signal.system}","${signal.strength}","${
+          detail?.elevation || 'N/A'
+        }","${detail?.azimuth || 'N/A'}"`;
+      })
+      .join('\n');
+
     const csv = headers + rows;
     Alert.alert(
-      'CSV Export Ready', 
+      'CSV Export Ready',
       `Exported ${satelliteSignals.length} satellites to CSV format.`,
-      [{ text: 'OK' }]
+      [{ text: 'OK' }],
     );
   };
 
@@ -171,9 +178,9 @@ export const GnssScreen: React.FC = () => {
 
     // Simple RINEX export simulation
     Alert.alert(
-      'RINEX Export Ready', 
+      'RINEX Export Ready',
       `Exported ${satelliteSignals.length} satellites in RINEX format.`,
-      [{ text: 'OK' }]
+      [{ text: 'OK' }],
     );
   };
 
@@ -194,11 +201,11 @@ export const GnssScreen: React.FC = () => {
         {/* Control Buttons */}
         <View style={styles.section}>
           <View style={styles.controlRow}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[
                 styles.controlButton,
                 styles.primaryButton,
-                isLoading && styles.disabledButton
+                isLoading && styles.disabledButton,
               ]}
               onPress={generateMockData}
               disabled={isLoading}
@@ -207,12 +214,12 @@ export const GnssScreen: React.FC = () => {
                 {isLoading ? 'Loading...' : 'Refresh Data'}
               </Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={[
                 styles.controlButton,
                 styles.secondaryButton,
-                (satelliteSignals.length === 0 || isLoading) && styles.disabledButton
+                (satelliteSignals.length === 0 || isLoading) && styles.disabledButton,
               ]}
               onPress={() => {
                 setSatelliteSignals([]);
@@ -234,10 +241,10 @@ export const GnssScreen: React.FC = () => {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Recording</Text>
             <View style={styles.statusRow}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.recordButton,
-                  isRecording ? styles.recordingActive : styles.recordingStopped
+                  isRecording ? styles.recordingActive : styles.recordingStopped,
                 ]}
                 onPress={toggleRecording}
               >
@@ -245,9 +252,7 @@ export const GnssScreen: React.FC = () => {
                   {isRecording ? `Recording - ${formatTime(recordingTime)}` : 'Start Recording'}
                 </Text>
               </TouchableOpacity>
-              <Text style={styles.signalQuality}>
-                Signal Quality: {signalQuality}
-              </Text>
+              <Text style={styles.signalQuality}>Signal Quality: {signalQuality}</Text>
             </View>
           </View>
         </View>
@@ -255,25 +260,30 @@ export const GnssScreen: React.FC = () => {
         {/* Signal Strength */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            Signal Strength (C/No) {satelliteSignals.length > 0 && `(${satelliteSignals.length} satellites)`}
+            Signal Strength (C/No){' '}
+            {satelliteSignals.length > 0 && `(${satelliteSignals.length} satellites)`}
           </Text>
           <View style={styles.card}>
             {satelliteSignals.length === 0 ? (
               <Text style={styles.noDataText}>
-                {isLoading ? 'Loading satellite data...' : 'No satellite data. Press "Refresh Data" to load.'}
+                {isLoading
+                  ? 'Loading satellite data...'
+                  : 'No satellite data. Press "Refresh Data" to load.'}
               </Text>
             ) : (
               satelliteSignals.map((satellite, index) => (
-                <View key={satellite.id} style={[
-                  styles.signalItem,
-                  index === satelliteSignals.length - 1 && styles.lastItem
-                ]}>
+                <View
+                  key={satellite.id}
+                  style={[
+                    styles.signalItem,
+                    index === satelliteSignals.length - 1 && styles.lastItem,
+                  ]}
+                >
                   <Text style={styles.satelliteId}>{satellite.id}</Text>
                   <Text style={styles.satelliteSystem}>{satellite.system}</Text>
-                  <Text style={[
-                    styles.signalStrength,
-                    { color: getSignalColor(satellite.dbValue) }
-                  ]}>
+                  <Text
+                    style={[styles.signalStrength, { color: getSignalColor(satellite.dbValue) }]}
+                  >
                     {satellite.strength}
                   </Text>
                 </View>
@@ -301,17 +311,17 @@ export const GnssScreen: React.FC = () => {
                 </View>
                 {/* Table Rows */}
                 {satelliteDetails.map((satellite, index) => (
-                  <View key={satellite.id} style={[
-                    styles.tableRow,
-                    index === satelliteDetails.length - 1 && styles.lastItem
-                  ]}>
+                  <View
+                    key={satellite.id}
+                    style={[
+                      styles.tableRow,
+                      index === satelliteDetails.length - 1 && styles.lastItem,
+                    ]}
+                  >
                     <Text style={styles.tableCell}>{satellite.id}</Text>
                     <Text style={styles.tableCell}>{satellite.elevation}</Text>
                     <Text style={styles.tableCell}>{satellite.azimuth}</Text>
-                    <Text style={[
-                      styles.tableCell,
-                      { color: getSignalColor(satellite.dbValue) }
-                    ]}>
+                    <Text style={[styles.tableCell, { color: getSignalColor(satellite.dbValue) }]}>
                       {satellite.cno}
                     </Text>
                   </View>
@@ -325,11 +335,8 @@ export const GnssScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Export Data</Text>
           <View style={styles.card}>
-            <TouchableOpacity 
-              style={[
-                styles.exportButton,
-                satelliteSignals.length === 0 && styles.disabledButton
-              ]}
+            <TouchableOpacity
+              style={[styles.exportButton, satelliteSignals.length === 0 && styles.disabledButton]}
               onPress={exportCSV}
               disabled={satelliteSignals.length === 0}
             >
@@ -337,11 +344,11 @@ export const GnssScreen: React.FC = () => {
                 Export as CSV {satelliteSignals.length > 0 && `(${satelliteSignals.length} sats)`}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[
-                styles.exportButton, 
+                styles.exportButton,
                 styles.exportButtonSecondary,
-                satelliteSignals.length === 0 && styles.disabledButton
+                satelliteSignals.length === 0 && styles.disabledButton,
               ]}
               onPress={exportRINEX}
               disabled={satelliteSignals.length === 0}
@@ -534,5 +541,137 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
     padding: spacing.medium,
+    marginBottom: spacing.medium,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.small,
+  },
+  statusIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: spacing.small,
+  },
+  warningBox: {
+    marginTop: spacing.medium,
+    padding: spacing.small,
+    backgroundColor: colors.error + '20',
+    borderRadius: 8,
+  },
+  controlSection: {
+    marginBottom: spacing.medium,
+  },
+  buttonSpacing: {
+    marginTop: spacing.small,
+  },
+  trackingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.success + '20',
+    padding: spacing.small,
+    borderRadius: 8,
+    marginBottom: spacing.medium,
+  },
+  trackingIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.success,
+    marginRight: spacing.small,
+  },
+  loggingCard: {
+    backgroundColor: colors.info + '20',
+    borderRadius: 12,
+    padding: spacing.medium,
+    marginBottom: spacing.medium,
+  },
+  dataCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: spacing.medium,
+    marginBottom: spacing.medium,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dataRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.small,
+  },
+  noDataContainer: {
+    paddingVertical: spacing.large,
+    alignItems: 'center',
+  },
+  constellationSection: {
+    marginTop: spacing.small,
+  },
+  constellationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingLeft: spacing.medium,
+    marginTop: spacing.xsmall,
+  },
+  infoCard: {
+    backgroundColor: colors.primary + '10',
+    borderRadius: 8,
+    padding: spacing.small,
+    marginBottom: spacing.large,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: spacing.large,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.medium,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  fileItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.medium,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  fileInfo: {
+    flex: 1,
+  },
+  fileMetadata: {
+    flexDirection: 'row',
+    marginTop: spacing.xsmall,
+  },
+  fileActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    padding: spacing.xsmall,
+  },
+  emptyList: {
+    padding: spacing.large,
+    alignItems: 'center',
   },
 });

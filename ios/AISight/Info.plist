@@ -33,7 +33,11 @@
 		<true/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>We need your location to display your position on the maritime map and track nearby vessels.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>We need your location to track your maritime position and provide accurate vessel tracking information.</string>
+	<key>NSUserNotificationUsageDescription</key>
+	<string>We'll notify you about vessel alerts and important maritime updates.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>
