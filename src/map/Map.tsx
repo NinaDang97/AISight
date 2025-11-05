@@ -50,6 +50,7 @@ import { usePermissions } from '../hooks';
 import { RESULTS } from 'react-native-permissions';
 import { LocationService } from '../services/location';
 import { logger } from '../utils/logger';
+import { useVesselDetails } from '../components/contexts/VesselDetailsContext';
 
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
@@ -338,6 +339,7 @@ const Map = () => {
         mapStyle={mapStyle}
         onPress={handleMapPress}
         attributionEnabled={false}
+        compassEnabled={false}
         onRegionWillChange={handleRegionWillChange}
         onRegionDidChange={updateVesselData}
       >
