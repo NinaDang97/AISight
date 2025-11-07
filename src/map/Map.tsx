@@ -128,7 +128,7 @@ const Map = () => {
     };
 
     tick();
-    const id = setInterval(tick, 15_000);
+    const id = setInterval(tick, 60_000);
 
     return () => {
       mounted = false;
