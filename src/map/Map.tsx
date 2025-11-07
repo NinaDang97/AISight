@@ -168,7 +168,7 @@ const Map = () => {
 
   const handleMapPress = useCallback(
     async (feature: GeoJSONFeature) => {
-      if (!mapRef.current || (!isGnssEnabled && !isShipEnabled)) {
+      if (!mapRef.current || !isGnssEnabled && !isShipEnabled) {
         setSelectedGnss(null);
         setCardVisible(false);
         return;
@@ -192,7 +192,6 @@ const Map = () => {
             ['gnss-mock-points', 'ships', 'passenger-ships'],
           );
         
-          console.log('>>> collection.features.length: ', collection.features.length)
         if(!collection.features || !collection.features.length) {
           setSelectedGnss(null);
           setCardVisible(false);
@@ -226,7 +225,7 @@ const Map = () => {
         setCardVisible(false);
       }
     },
-    [isGnssEnabled],
+    [isGnssEnabled, isShipEnabled],
   );
 
   const resetCamera = () => {
