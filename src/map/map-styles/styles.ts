@@ -171,7 +171,16 @@ export const updateShipData = (
       ...prevStyle.sources,
       'fintraffic-ships': {
         type: 'geojson',
-        data: vessels,
+        data: {
+          ...vessels,
+          features: vessels.features.map(f => ({
+            ...f,
+            properties: {
+              ...f.properties,
+              layerId: 'ships',
+            },
+          })),
+        },
       },
     },
   };
@@ -255,7 +264,16 @@ const plainPointLayer: CircleLayerSpecification = {
 
 const gnssMockSource: GeoJSONSourceSpecification = {
   type: 'geojson',
-  data: gnssMockFixes,
+  data: {
+    ...gnssMockFixes,
+    features: gnssMockFixes.features.map(f => ({
+      ...f,
+      properties: {
+        ...f.properties,
+        layerId: 'gnss-mock-points', // Add a unique layerId
+      },
+    })),
+  },
 };
 
 const gnssTrackLayer: LineLayerSpecification = {
