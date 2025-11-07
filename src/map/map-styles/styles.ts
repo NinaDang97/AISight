@@ -93,7 +93,6 @@ export const addShipLayer = (prevStyle: StyleSpecification): StyleSpecification 
       ...(baseStyle.layers ?? []),
       shipLayer,
       passengerShipLayer,
-      plainPointLayer,
       shipTextLayer,
     ],
   };
@@ -105,7 +104,6 @@ export const removeShipLayer = (prevStyle: StyleSpecification): StyleSpecificati
     layer =>
       layer.id !== shipLayer.id &&
       layer.id !== passengerShipLayer.id &&
-      layer.id !== plainPointLayer.id &&
       layer.id !== shipTextLayer.id,
   );
 
@@ -248,17 +246,6 @@ const herwoodLayer: LineLayerSpecification = {
   },
   layout: {
     'line-cap': 'round',
-  },
-};
-
-const plainPointLayer: CircleLayerSpecification = {
-  id: 'plain-point',
-  type: 'circle',
-  source: 'plain-point',
-  paint: {
-    'circle-color': '#0a0',
-    'circle-stroke-width': 2,
-    'circle-stroke-color': '#000',
   },
 };
 
