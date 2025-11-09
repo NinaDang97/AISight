@@ -93,7 +93,6 @@ export const addShipLayer = (prevStyle: StyleSpecification): StyleSpecification 
       ...(baseStyle.layers ?? []),
       shipLayer,
       passengerShipLayer,
-      plainPointLayer,
       shipTextLayer,
     ],
   };
@@ -105,7 +104,6 @@ export const removeShipLayer = (prevStyle: StyleSpecification): StyleSpecificati
     layer =>
       layer.id !== shipLayer.id &&
       layer.id !== passengerShipLayer.id &&
-      layer.id !== plainPointLayer.id &&
       layer.id !== shipTextLayer.id,
   );
 
@@ -171,7 +169,16 @@ export const updateShipData = (
       ...prevStyle.sources,
       'fintraffic-ships': {
         type: 'geojson',
-        data: vessels,
+        data: {
+          ...vessels,
+          features: vessels.features.map(f => ({
+            ...f,
+            properties: {
+              ...f.properties,
+              layerId: 'ships',
+            },
+          })),
+        },
       },
     },
   };
@@ -242,20 +249,18 @@ const herwoodLayer: LineLayerSpecification = {
   },
 };
 
-const plainPointLayer: CircleLayerSpecification = {
-  id: 'plain-point',
-  type: 'circle',
-  source: 'plain-point',
-  paint: {
-    'circle-color': '#0a0',
-    'circle-stroke-width': 2,
-    'circle-stroke-color': '#000',
-  },
-};
-
 const gnssMockSource: GeoJSONSourceSpecification = {
   type: 'geojson',
-  data: gnssMockFixes,
+  data: {
+    ...gnssMockFixes,
+    features: gnssMockFixes.features.map(f => ({
+      ...f,
+      properties: {
+        ...f.properties,
+        layerId: 'gnss-mock-points', // Add a unique layerId
+      },
+    })),
+  },
 };
 
 const gnssTrackLayer: LineLayerSpecification = {

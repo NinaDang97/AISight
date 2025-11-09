@@ -50,6 +50,7 @@ import { usePermissions } from '../hooks';
 import { RESULTS } from 'react-native-permissions';
 import { LocationService } from '../services/location';
 import { logger } from '../utils/logger';
+import { useVesselDetails } from '../components/contexts/VesselDetailsContext';
 
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
@@ -74,7 +75,7 @@ type RegionPayload = {
 
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
-  zoomLevel: 10,
+  zoomLevel: 6,
 };
 
 const defaultCameraCenter = cameraInitStop.centerCoordinate as GeoJSONPosition;
@@ -94,6 +95,7 @@ const Map = () => {
     React.useState<VesselMetadataCollection | null>(null);
 
   const { hasLocationPermission, requestLocation } = usePermissions();
+  const { setCardVisible, setVesselData } = useVesselDetails();
 
   useEffect(() => {
     setMapStyle(prev => {
@@ -126,7 +128,7 @@ const Map = () => {
     };
 
     tick();
-    const id = setInterval(tick, 15_000);
+    const id = setInterval(tick, 60_000);
 
     return () => {
       mounted = false;
@@ -166,8 +168,9 @@ const Map = () => {
 
   const handleMapPress = useCallback(
     async (feature: GeoJSONFeature) => {
-      if (!mapRef.current || !isGnssEnabled) {
+      if (!mapRef.current || !isGnssEnabled && !isShipEnabled) {
         setSelectedGnss(null);
+        setCardVisible(false);
         return;
       }
       const screenPointX = Number(
@@ -178,6 +181,7 @@ const Map = () => {
       );
       if (Number.isNaN(screenPointX) || Number.isNaN(screenPointY)) {
         setSelectedGnss(null);
+        setCardVisible(false);
         return;
       }
       try {
@@ -185,31 +189,43 @@ const Map = () => {
           await mapRef.current.queryRenderedFeaturesAtPoint(
             [screenPointX, screenPointY],
             undefined,
-            ['gnss-mock-points'],
+            ['gnss-mock-points', 'ships', 'passenger-ships'],
           );
+        
+        if(!collection.features || !collection.features.length) {
+          setSelectedGnss(null);
+          setCardVisible(false);
+        }
+
         const tappedFeature = collection.features[0];
-        if (!tappedFeature) {
+        const layerId = tappedFeature?.properties?.layerId;
+
+        if (layerId === 'gnss-mock-points') {
+          const fixIndex = Number(
+            (tappedFeature.properties as { fixIndex?: number } | undefined)?.fixIndex,
+          );
+          const detail = Number.isInteger(fixIndex) ? gnssFixDetails[fixIndex] : undefined;
+          if (detail) {
+            setSelectedGnss({
+              coordinate: detail.coordinate,
+              detail,
+            });
+          } else {
+            setSelectedGnss(null);
+          }
+        } else if (layerId === 'ships') {
           setSelectedGnss(null);
-          return;
+          setCardVisible(true);
+          setVesselData(tappedFeature);
         }
-        const fixIndex = Number(
-          (tappedFeature.properties as { fixIndex?: number } | undefined)?.fixIndex,
-        );
-        const detail = Number.isInteger(fixIndex) ? gnssFixDetails[fixIndex] : undefined;
-        if (detail) {
-          setSelectedGnss({
-            coordinate: detail.coordinate,
-            detail,
-          });
-        } else {
-          setSelectedGnss(null);
-        }
+        
       } catch (error) {
         console.warn('Unable to resolve GNSS selection', error);
         setSelectedGnss(null);
+        setCardVisible(false);
       }
     },
-    [isGnssEnabled],
+    [isGnssEnabled, isShipEnabled],
   );
 
   const resetCamera = () => {
@@ -338,6 +354,7 @@ const Map = () => {
         mapStyle={mapStyle}
         onPress={handleMapPress}
         attributionEnabled={false}
+        compassEnabled={false}
         onRegionWillChange={handleRegionWillChange}
         onRegionDidChange={updateVesselData}
       >
