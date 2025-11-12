@@ -25,7 +25,6 @@ import java.util.Locale
  */
 class GnssExportModule(private val reactCtx: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactCtx) {
-
     override fun getName(): String = "GnssExportModule"
 
     /**
@@ -57,6 +56,8 @@ class GnssExportModule(private val reactCtx: ReactApplicationContext) :
                 // Android 10+: Use MediaStore
                 val resolver = reactCtx.contentResolver
                 val values = ContentValues().apply {
+
+
                     put(MediaStore.MediaColumns.DISPLAY_NAME, name)
                     put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
                     put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/Aisight")

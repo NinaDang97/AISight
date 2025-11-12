@@ -74,6 +74,10 @@ type GnssModuleType = {
   isGpsEnabled(): Promise<boolean>;
   listLogFiles(): Promise<LogFileInfo[]>;
   deleteLogFile(filePath: string): Promise<boolean>;
+  // Polling methods for RN 0.76+ bridgeless mode workaround
+  getLatestLocation(): Promise<GnssLocation | null>;
+  getLatestStatus(): Promise<GnssStatus | null>;
+  getLatestMeasurements(): Promise<GnssMeasurement[] | null>;
 };
 
 /**
