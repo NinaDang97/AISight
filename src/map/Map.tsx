@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   View,
@@ -51,6 +51,7 @@ import { RESULTS } from 'react-native-permissions';
 import { LocationService } from '../services/location';
 import { logger } from '../utils/logger';
 import { useVesselDetails } from '../components/contexts/VesselDetailsContext';
+import { useVesselMqtt } from '../components/contexts/VesselMqttContext';
 
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
@@ -80,6 +81,11 @@ const cameraInitStop: CameraStop = {
 
 const defaultCameraCenter = cameraInitStop.centerCoordinate as GeoJSONPosition;
 
+const emptyVesselCollection: VesselFC = {
+  type: 'FeatureCollection',
+  features: [],
+};
+
 const Map = () => {
   // Initialize map with appropriate style based on API key availability
   const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(defaultStyle);
@@ -93,6 +99,48 @@ const Map = () => {
   const [isFollowingUser, setIsFollowingUser] = useState(false);
   const [vesselMetadataState, setVesselMetadataState] =
     React.useState<VesselMetadataCollection | null>(null);
+  const { vesselList } = useVesselMqtt();
+  const shouldUseLiveFeed = vesselList.length > 0;
+
+  const liveVesselCollection = useMemo<VesselFC>(() => {
+    if (!vesselList.length) {
+      return emptyVesselCollection;
+    }
+
+    return {
+      type: 'FeatureCollection',
+      features: vesselList
+        .filter(v => typeof v.lat === 'number' && typeof v.lon === 'number')
+        .map(v => {
+          const numericMmsi = Number(v.mmsi);
+          const metadata = vesselMetadataState?.metadataRecords.get(numericMmsi);
+          const rawRot = v.raw?.rot;
+
+          return {
+            type: 'Feature',
+            mmsi: numericMmsi,
+            geometry: {
+              type: 'Point',
+              coordinates: [v.lon, v.lat],
+            },
+            properties: {
+              mmsi: numericMmsi,
+              sog: typeof v.sog === 'number' ? v.sog : 0,
+              cog: typeof v.cog === 'number' ? v.cog : 0,
+              navStat: typeof v.navStat === 'number' ? v.navStat : 0,
+              rot: typeof rawRot === 'number' ? rawRot : 0,
+              posAcc: Boolean(v.posAcc),
+              raim: Boolean(v.raim),
+              heading: typeof v.heading === 'number' ? v.heading : undefined,
+              timestamp: v.receivedAt,
+              timestampExternal: v.reportedAt ?? v.receivedAt,
+              vesselMetadata: metadata,
+              layerId: 'ships',
+            },
+          };
+        }),
+    };
+  }, [vesselList, vesselMetadataState]);
 
   const { hasLocationPermission, requestLocation } = usePermissions();
   const { setCardVisible, setVesselData } = useVesselDetails();
@@ -137,6 +185,10 @@ const Map = () => {
   }, []);
 
   const updateVesselData = async () => {
+    if (shouldUseLiveFeed) {
+      return;
+    }
+
     const currentCenter = await mapRef.current?.getCenter();
     if (!currentCenter) throw new Error('Error getting map center');
     const visibleBounds = await mapRef.current?.getVisibleBounds();
@@ -157,6 +209,19 @@ const Map = () => {
 
     setMapStyle(prev => updateShipData(prev, vessels));
   };
+
+  useEffect(() => {
+    if (!isShipEnabled) {
+      return;
+    }
+    if (!shouldUseLiveFeed) {
+      return;
+    }
+    if (!liveVesselCollection.features.length) {
+      return;
+    }
+    setMapStyle(prev => updateShipData(prev, liveVesselCollection));
+  }, [isShipEnabled, shouldUseLiveFeed, liveVesselCollection]);
 
   // Handle user interaction with map - disable following mode when user scrolls
   const handleRegionWillChange = useCallback((feature: GeoJSONFeature<GeoJSON.Point, RegionPayload>) => {
@@ -198,6 +263,7 @@ const Map = () => {
         }
 
         const tappedFeature = collection.features[0];
+        console.log('>>> tappedFeature: ', tappedFeature)
         const layerId = tappedFeature?.properties?.layerId;
 
         if (layerId === 'gnss-mock-points') {

@@ -18,6 +18,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Button } from '../../components/common/Button';
 import { colors, typography, spacing } from '../../styles';
 import { useVesselDetails } from '../../components/contexts/VesselDetailsContext';
+import { useVesselMqtt } from '../../components/contexts/VesselMqttContext';
 
 /**
  * VesselAISDetails Component
@@ -92,8 +93,16 @@ const VesselAISDetails: React.FC = () => {
  */
 export const VesselDetailsScreen = () => {
   const { cardVisible, setCardVisible, detailsVisible, setDetailsVisible, vesselData } = useVesselDetails();
-  const properties = vesselData?.properties;
-  const coordinates = vesselData?.geometry?.coordinates;
+
+  const { vessels } = useVesselMqtt();
+ 
+  const mmsi = vesselData?.properties ? vesselData.properties.mmsi : null;
+
+  const liveVessel = mmsi ? vessels[mmsi] : undefined;
+  // const properties = liveVessel?.properties;
+  // const coordinates = liveVessel?.geometry?.coordinates;
+
+  // console.log('>>> liveVessel: ', liveVessel)
 
   /**
    * Determines the button text based on details visibility state
@@ -104,10 +113,15 @@ export const VesselDetailsScreen = () => {
   };
 
   // Don't render if no vessel is selected
-  if (!vesselData) return null;
+  if (!vesselData || !liveVessel) return null;
 
+  const {
+    sog,
+    cog,
+    receivedAt,
+  } = liveVessel;
   // Show loading state if data is incomplete
-  if (!properties || !coordinates) return <Text>Loading...</Text>
+  // if (!properties || !coordinates) return <Text>Loading...</Text>
 
   return (
     <View>
@@ -115,7 +129,7 @@ export const VesselDetailsScreen = () => {
         <View style={styles.vesselCard}>
           {/* Header with MMSI and Close button */}
           <View style={styles.cardHeader}>
-            <Text style={typography.heading4}>MMSI {properties.mmsi}</Text>
+            <Text style={typography.heading4}>MMSI {mmsi}</Text>
             <Pressable onPress={() => { setCardVisible(false); setDetailsVisible(false); }}>
               <Text>Close</Text>
             </Pressable>
@@ -129,17 +143,17 @@ export const VesselDetailsScreen = () => {
           {/* Basic vessel information */}
           <View style={styles.detailRow}>
             <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Speed:</Text>
-            <Text style={typography.body}>{properties.sog || 0} knots</Text>
+            <Text style={typography.body}>{sog || 0} knots</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Course:</Text>
-            <Text style={typography.body}>{properties.cog || 0}°</Text>
+            <Text style={typography.body}>{cog || 0}°</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
               Last Update:
             </Text>
-            <Text style={typography.body}>{new Date(properties?.timestampExternal).toUTCString()}</Text>
+            <Text style={typography.body}>{new Date(receivedAt).toUTCString()}</Text>
           </View>
 
           {/* Expandable detailed AIS information */}
