@@ -1,14 +1,15 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, Pressable } from 'react-native';
+import React, { useEffect } from 'react';
+import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaWrapper } from '../../components/common/SafeAreaWrapper';
 import { Button } from '../../components/common/Button';
-import { colors, typography, spacing } from '../../styles';
+import { colors, spacing, typography } from '../../styles';
 import { usePermissions } from '../../hooks';
+import { RESULTS } from 'react-native-permissions';
 
 const Licenses = () => {
   return (
     <ScrollView style={styles.container}>
-      <View style={[styles.item, {marginTop: spacing.xlarge}]}>
+      <View style={[styles.item, { marginTop: spacing.xlarge }]}>
         <Text style={typography.body}>Insert licences here</Text>
       </View>
     </ScrollView>
@@ -16,15 +17,42 @@ const Licenses = () => {
 };
 
 export const SettingsScreen = () => {
-  const [darkMode, setDarkMode] = React.useState(false);
+  const appState = React.useRef(AppState.currentState);
+  const [appStateVisible, setAppStateVisible] = React.useState(appState.current);
   const [licencesVisible, setLicencesVisible] = React.useState(false);
+  const [notificationsEnabled, setNotifications] = React.useState(false);
+  const [locationEnabled, setLocation] = React.useState(false);
 
-  const { openSettings } = usePermissions();
+  const { hasNotificationPermission, permissionState, checkPermissions, openSettings } =
+    usePermissions();
 
-  const handleDarkMode = () => {
-    setDarkMode(prev => !prev);
-    // switch to batman
-  };
+  useEffect(() => {
+    if (permissionState.notification === RESULTS.GRANTED) {
+      setLocation(true);
+    }
+    if (permissionState.location === RESULTS.GRANTED) {
+      setNotifications(true);
+    }
+    const sub = AppState.addEventListener('change', async nextAppState => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        console.log('App has come to the foreground!');
+        await checkPermissions();
+        console.log(hasNotificationPermission);
+        if (permissionState.notification === RESULTS.GRANTED) {
+          setLocation(true);
+        }
+        if (permissionState.location === RESULTS.GRANTED) {
+          setNotifications(true);
+        }
+      }
+      appState.current = nextAppState;
+      setAppStateVisible(appState.current);
+      console.log('AppState', appState.current);
+    });
+    return () => {
+      sub.remove();
+    };
+  }, []);
 
   const showLicences = () => {
     setLicencesVisible(true);
@@ -40,12 +68,12 @@ export const SettingsScreen = () => {
         <>
           <Licenses />
           <Button
-            title={'< Back'}
-            variant={'outline'}
+            title="< Back"
+            variant="outline"
             onPress={handleBack}
             style={{
               marginTop: spacing.large,
-              marginBottom:spacing.small,
+              marginBottom: spacing.small,
               marginStart: spacing.small,
               marginEnd: spacing.small,
             }}
@@ -60,33 +88,15 @@ export const SettingsScreen = () => {
           <Pressable onPress={openSettings}>
             <View style={styles.item}>
               <Text style={typography.body}>Push Notifications</Text>
-              <Text style={typography.body}>{'>'}</Text>
+              <Text style={typography.body}>{notificationsEnabled ? 'Enabled' : 'Disabled'}</Text>
             </View>
           </Pressable>
           <Pressable onPress={openSettings}>
             <View style={styles.item}>
               <Text style={typography.body}>Location services</Text>
-              <Text style={typography.body}>{'>'}</Text>
+              <Text style={typography.body}>{locationEnabled ? 'Enabled' : 'Disabled'}</Text>
             </View>
           </Pressable>
-          <View style={styles.item}>
-            <Text style={typography.body}>Dark Mode</Text>
-            <Switch
-              value={darkMode}
-              onValueChange={handleDarkMode}
-              trackColor={{ false: colors.textDisabled, true: colors.primary }}
-              thumbColor={colors.background}
-            />
-          </View>
-          <Text style={[typography.heading5, styles.sectionTitle]}>App Settings</Text>
-          <View style={styles.item}>
-            <Text style={typography.body}>Language</Text>
-            <Text style={typography.body}>English</Text>
-          </View>
-          <View style={styles.item}>
-            <Text style={typography.body}>Map Style</Text>
-            <Text style={typography.body}>Standard</Text>
-          </View>
           <Text style={[typography.heading5, styles.sectionTitle]}>About</Text>
           <View style={styles.item}>
             <Text style={typography.body}>Version</Text>
