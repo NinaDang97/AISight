@@ -205,11 +205,30 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
                     val loggingNow = GnssModule.isLogging
                     val writerNow = GnssModule.logWriter
 
+                    // Get AGC data if available (Android 12+ / API 31+)
+                    val avgAgcLevelDb: Double? = try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            // AGC API only available on Android 12+
+                            getAverageAgc(eventArgs)
+                        } else {
+                            null
+                        }
+                    } catch (e: Exception) {
+                        Log.w("GnssModule", "Error accessing AGC data: ${e.message}")
+                        null
+                    }
+
                     for (m in eventArgs.measurements) {
                         val item = Arguments.createMap().apply {
                             putInt("svid", m.svid)
                             val cn0 = m.getCn0DbHz().toDouble()
                             if (cn0.isFinite()) putDouble("cn0DbHz", cn0)
+
+                            // Add AGC data if available
+                            if (avgAgcLevelDb != null && avgAgcLevelDb.isFinite()) {
+                                putDouble("agcLevelDb", avgAgcLevelDb)
+                            }
+
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                 try {
                                     if (m.hasCarrierFrequencyHz()) {
@@ -223,7 +242,7 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
                         arr.pushMap(item)
 
                         if (loggingNow && writerNow != null) {
-                            writeToLog(m, batchTimeNanos)
+                            writeToLog(m, batchTimeNanos, avgAgcLevelDb)
                         }
                     }
 
@@ -383,7 +402,7 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
         if (isStarted) stopInternal()
     }
 
-    private fun writeToLog(m: android.location.GnssMeasurement, batchTimeNanos: Long) {
+    private fun writeToLog(m: android.location.GnssMeasurement, batchTimeNanos: Long, agcLevelDb: Double? = null) {
         try {
             val writer = logWriter ?: return
 
@@ -405,8 +424,10 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
                 }
             } else ""
 
-            // CSV format: timestamp,datetime,type,latitude,longitude,altitude,accuracy,speed,bearing,provider,svid,constellation,cn0DbHz,carrierFrequencyHz,timeNanos
-            val csvLine = "$timestamp,$datetime,$type,,,,,,,,$svid,$constellation,$cn0Str,$carrierFreq,$batchTimeNanos\n"
+            val agcStr = if (agcLevelDb != null && agcLevelDb.isFinite()) agcLevelDb.toString() else ""
+
+            // CSV format: timestamp,datetime,type,latitude,longitude,altitude,accuracy,speed,bearing,provider,svid,constellation,cn0DbHz,carrierFrequencyHz,timeNanos,agcLevelDb
+            val csvLine = "$timestamp,$datetime,$type,,,,,,,,$svid,$constellation,$cn0Str,$carrierFreq,$batchTimeNanos,$agcStr\n"
 
             synchronized(writer) {
                 writer.append(csvLine)
@@ -436,8 +457,8 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
             val bearing = if (loc.hasBearing()) loc.bearing.toString() else ""
             val provider = loc.provider ?: ""
 
-            // CSV format: timestamp,datetime,type,latitude,longitude,altitude,accuracy,speed,bearing,provider,svid,constellation,cn0DbHz,carrierFrequencyHz,timeNanos
-            val csvLine = "$timestamp,$datetime,$type,$lat,$lon,$alt,$acc,$speed,$bearing,$provider,,,,,\n"
+            // CSV format: timestamp,datetime,type,latitude,longitude,altitude,accuracy,speed,bearing,provider,svid,constellation,cn0DbHz,carrierFrequencyHz,timeNanos,agcLevelDb
+            val csvLine = "$timestamp,$datetime,$type,$lat,$lon,$alt,$acc,$speed,$bearing,$provider,,,,,,\n"
 
             synchronized(writer) {
                 writer.append(csvLine)
@@ -506,7 +527,7 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
 
         // Write CSV header if new file
         if (isNewFile) {
-            writer.append("timestamp,datetime,type,latitude,longitude,altitude,accuracy,speed,bearing,provider,svid,constellation,cn0DbHz,carrierFrequencyHz,timeNanos\n")
+            writer.append("timestamp,datetime,type,latitude,longitude,altitude,accuracy,speed,bearing,provider,svid,constellation,cn0DbHz,carrierFrequencyHz,timeNanos,agcLevelDb\n")
             writer.flush()
         }
 
@@ -518,5 +539,40 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
         try { logWriter?.close() } catch (_: Exception) {}
         logWriter = null
         logFile = null
+    }
+
+    /**
+     * Get average AGC level from GNSS measurements event using reflection
+     * Only available on Android 12+ (API 31+)
+     * Uses reflection to avoid NoSuchMethodError on older Android versions
+     */
+    private fun getAverageAgc(eventArgs: GnssMeasurementsEvent): Double? {
+        return try {
+            // Use reflection to safely access the method
+            val method = eventArgs.javaClass.getMethod("getGnssAutomaticGainControls")
+            @Suppress("UNCHECKED_CAST")
+            val agcControls = method.invoke(eventArgs) as? Collection<*>
+
+            if (agcControls != null && agcControls.isNotEmpty()) {
+                var sum = 0.0
+                var count = 0
+                for (agc in agcControls) {
+                    // Get levelDb from each GnssAutomaticGainControl object
+                    val levelDbMethod = agc?.javaClass?.getMethod("getLevelDb")
+                    val levelDb = levelDbMethod?.invoke(agc) as? Double
+                    if (levelDb != null) {
+                        sum += levelDb
+                        count++
+                    }
+                }
+                if (count > 0) sum / count else null
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            // This is expected on Android < 12
+            Log.d("GnssModule", "AGC not available on this device (Android < 12)")
+            null
+        }
     }
 }

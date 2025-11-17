@@ -1,40 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaWrapper } from '../../components/common/SafeAreaWrapper';
 import { colors, typography, spacing, theme } from '../../styles';
+import { useAnomaly } from '../../components/contexts';
+import { useGnss } from '../../components/contexts';
+import { calculatePathDistance, formatDuration, formatLocation } from '../../services/anomaly';
+import { GnssAnomalyEvent } from '../../native/GnssModule';
 
-// Types for our data
-interface Anomaly {
-  id: string;
-  title: string;
-  type: string;
-  severity: 'High' | 'Medium' | 'Low';
-  timestamp: string;
-  status: 'Active' | 'Investigating' | 'Processed' | 'Completed';
-  vessel: string;
-  location: string;
-  description: string;
-}
-
+// Type alias for filtering
 type SeverityFilter = 'All' | 'High' | 'Medium' | 'Low';
 
 export const AnomalyScreen = () => {
-  const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const gnss = useGnss();
+  const anomalyContext = useAnomaly();
   const [filter, setFilter] = useState<SeverityFilter>('All');
-  const [isLoading, setIsLoading] = useState(false);
-  const [stats, setStats] = useState({
-    totalVessels: 0,
-    activeNow: 0,
-    totalAnomalies: 0,
-    highSeverity: 0,
-    mediumSeverity: 0,
-    lowSeverity: 0,
-  });
+
+  // Combine active and detected anomalies
+  const allAnomalies: GnssAnomalyEvent[] = anomalyContext.activeAnomaly
+    ? [anomalyContext.activeAnomaly, ...anomalyContext.detectedAnomalies]
+    : anomalyContext.detectedAnomalies;
 
   // Filter anomalies based on selected filter
-  const filteredAnomalies = filter === 'All' 
-    ? anomalies 
-    : anomalies.filter(anomaly => anomaly.severity === filter);
+  const filteredAnomalies = filter === 'All'
+    ? allAnomalies
+    : allAnomalies.filter(a => a.severity === filter);
+
+  // Calculate stats
+  const stats = {
+    totalVessels: 1, // Current device
+    activeNow: anomalyContext.activeAnomaly ? 1 : 0,
+    totalAnomalies: allAnomalies.length,
+    highSeverity: allAnomalies.filter(a => a.severity === 'High').length,
+    mediumSeverity: allAnomalies.filter(a => a.severity === 'Medium').length,
+    lowSeverity: allAnomalies.filter(a => a.severity === 'Low').length,
+  };
 
   const getSeverityColor = (severity: string) => {
     switch (severity.toLowerCase()) {
@@ -48,139 +47,106 @@ export const AnomalyScreen = () => {
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'active': return colors.error;
-      case 'investigating': return colors.warning;
-      case 'processed': return colors.info;
       case 'completed': return colors.success;
       default: return colors.textSecondary;
     }
   };
 
-  // Generate realistic mock anomaly data
-  const generateMockData = () => {
-    setIsLoading(true);
-    
-    // Simulate API delay
-    setTimeout(() => {
-      const anomalyTypes = [
-        'Position Anomaly', 'Course Deviation', 'Speed Anomaly', 
-        'GNSS Spoofing', 'Signal Jamming', 'Data Gap', 'Route Deviation'
-      ];
-      const vessels = [
-        'M/V Nordic Star', 'M/V Baltic Trader', 'M/V Helsinki Express',
-        'M/V Tallinn Ferry', 'M/V Gotland', 'M/V Stena Line',
-        'M/V Viking Line', 'M/V Silja Serenade'
-      ];
-      const locations = [
-        'Baltic Sea, Gulf of Finland', 'Near Kaliningrad', 'Approaching Tallinn',
-        'Helsinki Harbor Approach', 'Stockholm Archipelago', 'Gotland Basin',
-        'Bornholm Basin', 'Gdansk Bay'
-      ];
+  // Format timestamp to relative time
+  const formatTimestamp = (timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor(diff / (1000 * 60));
 
-      const newAnomalies: Anomaly[] = [];
-      const anomalyCount = Math.floor(Math.random() * 6) + 4; // 5-13 anomalies
-      
-      for (let i = 0; i < anomalyCount; i++) {
-        const severity = ['High', 'Medium', 'Low'][Math.floor(Math.random() * 3)] as 'High' | 'Medium' | 'Low';
-        const status = ['Active', 'Investigating', 'Processed', 'Completed'][Math.floor(Math.random() * 4)] as 
-          'Active' | 'Investigating' | 'Processed' | 'Completed';
-        
-        const hoursAgo = Math.floor(Math.random() * 48); // 0-48 hours ago
-        const timestamp = `${hoursAgo} ${hoursAgo === 1 ? 'hour' : 'hours'} ago`;
-        
-        newAnomalies.push({
-          id: `anom_${Date.now()}_${i}`,
-          title: `${anomalyTypes[Math.floor(Math.random() * anomalyTypes.length)]} Detected`,
-          type: anomalyTypes[Math.floor(Math.random() * anomalyTypes.length)],
-          severity,
-          timestamp,
-          status,
-          vessel: vessels[Math.floor(Math.random() * vessels.length)],
-          location: locations[Math.floor(Math.random() * locations.length)],
-          description: `Anomaly detected in vessel navigation pattern requiring ${severity.toLowerCase()} priority attention.`
-        });
+    if (hours > 0) {
+      return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+    } else if (minutes > 0) {
+      return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+    } else {
+      return 'Just now';
+    }
+  };
+
+  // Validate signal quality before starting calibration
+  const validateSignalQuality = (): { isValid: boolean; message?: string } => {
+    const MIN_SATELLITES = 6;
+    const MIN_CN0 = 35.0;
+
+    if (!anomalyContext.currentEpoch) {
+      return {
+        isValid: false,
+        message: 'No GNSS measurements available yet. Please wait a moment and try again.'
+      };
+    }
+
+    if (anomalyContext.currentEpoch.satelliteCount < MIN_SATELLITES) {
+      return {
+        isValid: false,
+        message: `Poor signal quality: Only ${anomalyContext.currentEpoch.satelliteCount} satellites visible (minimum: ${MIN_SATELLITES}). Please move to an area with clear sky view.`
+      };
+    }
+
+    if (anomalyContext.currentEpoch.avgCn0DbHz < MIN_CN0) {
+      return {
+        isValid: false,
+        message: `Poor signal quality: C/N0 is ${anomalyContext.currentEpoch.avgCn0DbHz.toFixed(1)} dB-Hz (minimum: ${MIN_CN0} dB-Hz). Please move to an area with clear sky view.`
+      };
+    }
+
+    return { isValid: true };
+  };
+
+  // Handle start/stop detection
+  const toggleDetection = () => {
+    if (!gnss.isTracking) {
+      Alert.alert(
+        'Start GNSS Tracking First',
+        'Please start GNSS tracking from the GNSS screen before enabling anomaly detection.'
+      );
+      return;
+    }
+
+    if (anomalyContext.isDetecting) {
+      anomalyContext.stopDetection();
+    } else {
+      // Validate signal quality before starting
+      const validation = validateSignalQuality();
+      if (!validation.isValid) {
+        Alert.alert(
+          'Signal Quality Too Low',
+          validation.message,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Start Anyway',
+              style: 'destructive',
+              onPress: () => anomalyContext.startDetection(),
+            },
+          ]
+        );
+        return;
       }
 
-      // Sort by timestamp (most recent first)
-      newAnomalies.sort((a, b) => {
-        const aHours = parseInt(a.timestamp);
-        const bHours = parseInt(b.timestamp);
-        return aHours - bHours; // Most recent first (lower hours ago)
-      });
-
-      // Calculate statistics
-      const highSeverity = newAnomalies.filter(a => a.severity === 'High').length;
-      const mediumSeverity = newAnomalies.filter(a => a.severity === 'Medium').length;
-      const lowSeverity = newAnomalies.filter(a => a.severity === 'Low').length;
-
-      setStats({
-        totalVessels: Math.floor(Math.random() * 1000) + 100, // 1000-10000 vessels
-        activeNow: Math.floor(Math.random() * 900) + 500, // 1000-9000 active
-        totalAnomalies: newAnomalies.length,
-        highSeverity,
-        mediumSeverity,
-        lowSeverity,
-      });
-
-      setAnomalies(newAnomalies);
-      setIsLoading(false);
-    }, 1500);
+      anomalyContext.startDetection();
+    }
   };
 
-  // Generate anomaly report
-  const generateReport = () => {
-    if (anomalies.length === 0) {
-      Alert.alert('No Data', 'Please generate anomaly data first');
-      return;
-    }
-
-    const reportData = {
-      generatedAt: new Date().toISOString(),
-      totalAnomalies: anomalies.length,
-      highSeverity: anomalies.filter(a => a.severity === 'High').length,
-      mediumSeverity: anomalies.filter(a => a.severity === 'Medium').length,
-      lowSeverity: anomalies.filter(a => a.severity === 'Low').length,
-      activeAnomalies: anomalies.filter(a => a.status === 'Active').length,
-      anomalies: filteredAnomalies.map(a => ({
-        vessel: a.vessel,
-        type: a.type,
-        severity: a.severity,
-        location: a.location,
-        timestamp: a.timestamp,
-      }))
-    };
-
+  // Handle recalibration
+  const handleRecalibrate = () => {
     Alert.alert(
-      'Anomaly Report Generated',
-      `Report includes ${reportData.totalAnomalies} total anomalies with ${reportData.highSeverity} high priority issues.\n\nReport saved to device.`,
-      [{ text: 'OK' }]
+      'Recalibrate Baseline',
+      'This will reset the baseline reference. Use this if you have moved from a poor signal area to a location with better sky view. Any active anomaly will be marked as completed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Recalibrate',
+          style: 'default',
+          onPress: () => anomalyContext.recalibrate(),
+        },
+      ]
     );
   };
-
-  // Export anomaly data
-  const exportAnomalyData = () => {
-    if (anomalies.length === 0) {
-      Alert.alert('No Data', 'Please generate anomaly data first');
-      return;
-    }
-
-    // Simple CSV export simulation
-    const headers = 'Vessel,Type,Severity,Location,Timestamp,Status\n';
-    const rows = anomalies.map(anomaly => 
-      `"${anomaly.vessel}","${anomaly.type}","${anomaly.severity}","${anomaly.location}","${anomaly.timestamp}","${anomaly.status}"`
-    ).join('\n');
-    
-    const csv = headers + rows;
-    Alert.alert(
-      'Anomaly Data Exported',
-      `Exported ${anomalies.length} anomalies to CSV format.`,
-      [{ text: 'OK' }]
-    );
-  };
-
-  // Load mock data on first render
-  useEffect(() => {
-    generateMockData();
-  }, []);
 
   return (
     <SafeAreaWrapper backgroundColor={colors.background} barStyle="dark-content">
@@ -188,48 +154,137 @@ export const AnomalyScreen = () => {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Anomaly Detection</Text>
-          <Text style={styles.headerSubtitle}>Monitor navigation anomalies</Text>
+          <Text style={styles.headerSubtitle}>
+            {anomalyContext.isDetecting
+              ? 'Monitoring GNSS signals for anomalies'
+              : 'Monitor navigation anomalies'}
+          </Text>
         </View>
+
+        {/* GNSS Status Warning */}
+        {!gnss.isGpsEnabled && (
+          <View style={styles.section}>
+            <View style={[styles.card, styles.warningCard]}>
+              <Text style={styles.warningText}>
+                GPS is disabled. Please enable GPS to use anomaly detection.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Calibration Progress */}
+        {anomalyContext.isDetecting && !anomalyContext.detectorReady && (
+          <View style={styles.section}>
+            <View style={[styles.card, styles.infoCard]}>
+              <Text style={styles.infoText}>
+                Calibrating baseline... {anomalyContext.remainingEpochs} epochs remaining
+              </Text>
+              <View style={styles.progressBarContainer}>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    { width: `${anomalyContext.calibrationProgress}%` }
+                  ]}
+                />
+              </View>
+              <Text style={styles.progressText}>
+                {anomalyContext.calibrationProgress}% complete
+              </Text>
+              {anomalyContext.currentEpoch && (
+                <View style={styles.calibrationStats}>
+                  <Text style={styles.calibrationStatText}>
+                    Current Signal - Satellites: {anomalyContext.currentEpoch.satelliteCount}, C/N0: {anomalyContext.currentEpoch.avgCn0DbHz.toFixed(1)} dB-Hz
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Baseline Statistics */}
+        {anomalyContext.isDetecting && anomalyContext.baselineStats && (
+          <View style={styles.section}>
+            <View style={styles.card}>
+              <View style={styles.baselineHeader}>
+                <Text style={styles.baselineTitle}>Baseline Statistics</Text>
+                {anomalyContext.isBaselineFrozen && (
+                  <View style={styles.frozenBadge}>
+                    <Text style={styles.frozenText}>FROZEN</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.cardText}>
+                Avg C/N0: {anomalyContext.baselineStats.avgCn0.toFixed(1)} dB-Hz
+              </Text>
+              {anomalyContext.baselineStats.avgAgc !== undefined && (
+                <Text style={styles.cardText}>
+                  Avg AGC: {anomalyContext.baselineStats.avgAgc.toFixed(1)} dB
+                </Text>
+              )}
+              <Text style={styles.cardText}>
+                Avg Satellites: {anomalyContext.baselineStats.satelliteCount}
+              </Text>
+              <Text style={styles.cardText}>
+                Based on {anomalyContext.baselineStats.epochCount} epochs
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Control Buttons */}
         <View style={styles.section}>
           <View style={styles.controlRow}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[
                 styles.controlButton,
-                styles.primaryButton,
-                isLoading && styles.disabledButton
+                anomalyContext.isDetecting ? styles.stopButton : styles.startButton,
+                !gnss.isGpsEnabled && styles.disabledButton,
               ]}
-              onPress={generateMockData}
-              disabled={isLoading}
+              onPress={toggleDetection}
+              disabled={!gnss.isGpsEnabled}
             >
               <Text style={styles.controlButtonText}>
-                {isLoading ? 'Loading...' : 'Refresh Data'}
+                {anomalyContext.isDetecting ? 'Stop Detection' : 'Start Detection'}
               </Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={[
                 styles.controlButton,
                 styles.secondaryButton,
-                (anomalies.length === 0 || isLoading) && styles.disabledButton
+                (allAnomalies.length === 0) && styles.disabledButton,
               ]}
               onPress={() => {
-                setAnomalies([]);
-                setStats({
-                  totalVessels: 0,
-                  activeNow: 0,
-                  totalAnomalies: 0,
-                  highSeverity: 0,
-                  mediumSeverity: 0,
-                  lowSeverity: 0,
-                });
+                if (allAnomalies.length > 0) {
+                  Alert.alert(
+                    'Clear Anomalies',
+                    'Are you sure you want to clear all detected anomalies?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Clear',
+                        style: 'destructive',
+                        onPress: anomalyContext.clearAnomalies,
+                      },
+                    ]
+                  );
+                }
               }}
-              disabled={anomalies.length === 0 || isLoading}
+              disabled={allAnomalies.length === 0}
             >
               <Text style={styles.controlButtonText}>Clear Data</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Recalibrate button - shown when detecting and baseline established */}
+          {anomalyContext.isDetecting && anomalyContext.detectorReady && (
+            <TouchableOpacity
+              style={[styles.controlButton, styles.recalibrateButton, styles.fullWidthButton]}
+              onPress={handleRecalibrate}
+            >
+              <Text style={styles.controlButtonText}>Recalibrate Baseline</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Statistics Section */}
@@ -238,10 +293,12 @@ export const AnomalyScreen = () => {
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Text style={styles.statNumber}>{stats.totalVessels}</Text>
-              <Text style={styles.statLabel}>Total Vessels</Text>
+              <Text style={styles.statLabel}>Your Device</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={[styles.statNumber, { color: colors.success }]}>{stats.activeNow}</Text>
+              <Text style={[styles.statNumber, { color: stats.activeNow > 0 ? colors.error : colors.success }]}>
+                {stats.activeNow}
+              </Text>
               <Text style={styles.statLabel}>Active Now</Text>
             </View>
             <View style={styles.statCard}>
@@ -280,87 +337,98 @@ export const AnomalyScreen = () => {
         {/* Recent Anomalies */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            Recent Anomalies {filteredAnomalies.length > 0 && `(${filteredAnomalies.length} ${filter.toLowerCase()})`}
+            Detected Anomalies {filteredAnomalies.length > 0 && `(${filteredAnomalies.length})`}
           </Text>
           <View style={styles.anomaliesCard}>
-            {anomalies.length === 0 ? (
+            {!anomalyContext.isDetecting && allAnomalies.length === 0 ? (
               <Text style={styles.noDataText}>
-                {isLoading ? 'Loading anomaly data...' : 'No anomaly data. Press "Refresh Data" to load.'}
+                No anomalies detected. Start detection to monitor GNSS signals.
               </Text>
             ) : filteredAnomalies.length === 0 ? (
               <Text style={styles.noDataText}>
                 No {filter.toLowerCase()} severity anomalies found.
               </Text>
             ) : (
-              filteredAnomalies.map((anomaly, index) => (
-                <View 
-                  key={anomaly.id} 
+              filteredAnomalies.map((anom, index) => (
+                <View
+                  key={anom.id}
                   style={[
                     styles.anomalyItem,
                     index === filteredAnomalies.length - 1 && styles.lastItem
                   ]}
                 >
                   <View style={styles.anomalyHeader}>
-                    <Text style={styles.anomalyTitle}>{anomaly.title}</Text>
+                    <Text style={styles.anomalyTitle}>{anom.type.replace(/_/g, ' ')}</Text>
                     <View style={[
                       styles.severityBadge,
-                      { backgroundColor: getSeverityColor(anomaly.severity) }
+                      { backgroundColor: getSeverityColor(anom.severity) }
                     ]}>
-                      <Text style={styles.severityText}>{anomaly.severity}</Text>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.anomalyDetails}>
-                    <Text style={styles.vesselName}>{anomaly.vessel}</Text>
-                    <View style={[
-                      styles.statusBadge,
-                      { backgroundColor: getStatusColor(anomaly.status) }
-                    ]}>
-                      <Text style={styles.statusText}>{anomaly.status}</Text>
+                      <Text style={styles.severityText}>{anom.severity}</Text>
                     </View>
                   </View>
 
-                  <Text style={styles.anomalyLocation}>{anomaly.location}</Text>
-                  <Text style={styles.anomalyDescription}>{anomaly.description}</Text>
-                  
-                  <Text style={styles.timestamp}>{anomaly.timestamp}</Text>
+                  <View style={styles.anomalyDetails}>
+                    <Text style={styles.vesselName}>Current Device</Text>
+                    <View style={[
+                      styles.statusBadge,
+                      { backgroundColor: getStatusColor(anom.status) }
+                    ]}>
+                      <Text style={styles.statusText}>{anom.status}</Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.anomalyLocation}>
+                    Start: {formatLocation(anom.startLocation)}
+                  </Text>
+
+                  {anom.endLocation && (
+                    <Text style={styles.anomalyLocation}>
+                      End: {formatLocation(anom.endLocation)}
+                    </Text>
+                  )}
+
+                  <Text style={styles.anomalyDescription}>{anom.description}</Text>
+
+                  <View style={styles.anomalyMetrics}>
+                    <Text style={styles.metricText}>
+                      Duration: {formatDuration(
+                        (anom.endTime || Date.now()) - anom.startTime
+                      )}
+                    </Text>
+                    <Text style={styles.metricText}>
+                      Path: {anom.path.length} points ({calculatePathDistance(anom.path).toFixed(1)}m)
+                    </Text>
+                  </View>
+
+                  <Text style={styles.timestamp}>{formatTimestamp(anom.startTime)}</Text>
                 </View>
               ))
             )}
           </View>
         </View>
 
-        {/* Export/Report Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Reports & Export</Text>
-          <View style={styles.actionsCard}>
-            <TouchableOpacity 
-              style={[
-                styles.exportButton,
-                anomalies.length === 0 && styles.disabledButton
-              ]}
-              onPress={generateReport}
-              disabled={anomalies.length === 0}
-            >
-              <Text style={styles.exportButtonText}>
-                Generate Anomaly Report {anomalies.length > 0 && `(${anomalies.length} anomalies)`}
+        {/* Current Epoch Info (for debugging/monitoring) */}
+        {anomalyContext.isDetecting && anomalyContext.currentEpoch && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Current Measurements</Text>
+            <View style={styles.card}>
+              <Text style={styles.cardText}>
+                Satellites: {anomalyContext.currentEpoch.satelliteCount}
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[
-                styles.exportButton, 
-                styles.exportButtonSecondary,
-                anomalies.length === 0 && styles.disabledButton
-              ]}
-              onPress={exportAnomalyData}
-              disabled={anomalies.length === 0}
-            >
-              <Text style={styles.exportButtonText}>
-                Export Anomaly Data {anomalies.length > 0 && `(${anomalies.length} anomalies)`}
+              <Text style={styles.cardText}>
+                Avg C/N0: {anomalyContext.currentEpoch.avgCn0DbHz.toFixed(1)} dB-Hz
               </Text>
-            </TouchableOpacity>
+              {anomalyContext.currentEpoch.avgAgcLevelDb !== undefined && (
+                <Text style={styles.cardText}>
+                  Avg AGC: {anomalyContext.currentEpoch.avgAgcLevelDb.toFixed(1)} dB
+                </Text>
+              )}
+              <Text style={styles.cardText}>
+                Detector Status: {anomalyContext.detectorReady ? 'Ready' : 'Collecting baseline...'}
+              </Text>
+            </View>
           </View>
-        </View>
+        )}
       </ScrollView>
     </SafeAreaWrapper>
   );
@@ -397,6 +465,32 @@ const styles = StyleSheet.create({
     marginBottom: spacing.small,
     fontWeight: '600',
   },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: theme.borderRadius.medium,
+    padding: spacing.medium,
+    ...theme.shadows.small,
+  },
+  warningCard: {
+    backgroundColor: colors.error + '20',
+    borderLeftWidth: 4,
+    borderLeftColor: colors.error,
+  },
+  warningText: {
+    ...typography.body,
+    color: colors.error,
+    fontWeight: '500',
+  },
+  infoCard: {
+    backgroundColor: colors.info + '20',
+    borderLeftWidth: 4,
+    borderLeftColor: colors.info,
+  },
+  infoText: {
+    ...typography.body,
+    color: colors.info,
+    fontWeight: '500',
+  },
   controlRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -408,11 +502,21 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.medium,
     alignItems: 'center',
   },
-  primaryButton: {
-    backgroundColor: colors.primary,
+  startButton: {
+    backgroundColor: colors.success,
+  },
+  stopButton: {
+    backgroundColor: colors.error,
   },
   secondaryButton: {
     backgroundColor: colors.secondary,
+  },
+  recalibrateButton: {
+    backgroundColor: colors.warning,
+    marginTop: spacing.small,
+  },
+  fullWidthButton: {
+    flex: undefined,
   },
   disabledButton: {
     backgroundColor: colors.textDisabled,
@@ -544,31 +648,17 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginBottom: spacing.xsmall,
   },
+  anomalyMetrics: {
+    marginTop: spacing.xsmall,
+    marginBottom: spacing.xsmall,
+  },
+  metricText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+  },
   timestamp: {
     ...typography.caption,
     color: colors.textSecondary,
-  },
-  actionsCard: {
-    backgroundColor: colors.surface,
-    borderRadius: theme.borderRadius.medium,
-    padding: spacing.medium,
-    ...theme.shadows.small,
-  },
-  exportButton: {
-    backgroundColor: colors.primary,
-    padding: spacing.medium,
-    borderRadius: theme.borderRadius.medium,
-    alignItems: 'center',
-    marginBottom: spacing.small,
-  },
-  exportButtonSecondary: {
-    backgroundColor: colors.secondary,
-  },
-  exportButtonText: {
-    ...typography.button,
-    color: colors.textInverse,
-    fontWeight: '600',
-    textAlign: 'center',
   },
   noDataText: {
     ...typography.body,
@@ -576,5 +666,61 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
     padding: spacing.medium,
+  },
+  cardText: {
+    ...typography.body,
+    color: colors.textPrimary,
+    marginBottom: spacing.xsmall,
+  },
+  progressBarContainer: {
+    height: 8,
+    backgroundColor: colors.border,
+    borderRadius: theme.borderRadius.small,
+    marginTop: spacing.small,
+    marginBottom: spacing.xsmall,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: colors.info,
+    borderRadius: theme.borderRadius.small,
+  },
+  progressText: {
+    ...typography.caption,
+    color: colors.info,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  calibrationStats: {
+    marginTop: spacing.small,
+    paddingTop: spacing.small,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  calibrationStatText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+  },
+  baselineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.small,
+  },
+  baselineTitle: {
+    ...typography.heading4,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  frozenBadge: {
+    backgroundColor: colors.warning,
+    paddingHorizontal: spacing.small,
+    paddingVertical: spacing.xsmall,
+    borderRadius: theme.borderRadius.small,
+  },
+  frozenText: {
+    ...typography.caption,
+    color: colors.textInverse,
+    fontWeight: '700',
   },
 });
