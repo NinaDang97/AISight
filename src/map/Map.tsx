@@ -263,7 +263,6 @@ const Map = () => {
         }
 
         const tappedFeature = collection.features[0];
-        console.log('>>> tappedFeature: ', tappedFeature)
         const layerId = tappedFeature?.properties?.layerId;
 
         if (layerId === 'gnss-mock-points') {

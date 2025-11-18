@@ -75,8 +75,8 @@ export const VesselDetailsScreen = () => {
             </Pressable>
           </View>
 
-          {/* Active status badge */}
-          <View style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between' }}>
+          {/* Status badge */}
+          <View style={styles.statusBadgeContainer}>
             <View style={{...styles.statusBadge, ...((sog || 0) === 0 && { backgroundColor: colors.offline })}}>
               <Text style={[typography.caption, { color: colors.textInverse }]}>{(sog || 0) > 0 ? 'Active' : 'Stationary'}</Text>
             </View>
@@ -175,6 +175,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 5, // Android shadow
+  },
+  statusBadgeContainer: {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   /**
    * Status badge (Active/Inactive indicator)

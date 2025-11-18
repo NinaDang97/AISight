@@ -5,7 +5,7 @@ const MQTT_URI = 'wss://meri.digitraffic.fi:443/mqtt';
 const MQTT_LOCATION_TOPIC = 'vessels-v2/+/location';
 const MQTT_METADATA_TOPIC = 'vessels-v2/+/metadata';
 
-type VesselMetadataRecord = {
+export type VesselMetadataRecord = {
   timestamp: number;
   destination: string | null;
   name: string | null;
