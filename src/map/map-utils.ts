@@ -11,7 +11,7 @@ interface FinTrafficVesselFeatureProperties {
   raim: boolean;
   heading?: number;
   timestamp: number;
-  timestampExternal: number;
+  timestampExternal?: number;
 }
 
 interface FinTrafficVesselFeature

@@ -113,7 +113,8 @@ const Map = () => {
         .filter(v => typeof v.lat === 'number' && typeof v.lon === 'number')
         .map(v => {
           const numericMmsi = Number(v.mmsi);
-          const metadata = vesselMetadataState?.metadataRecords.get(numericMmsi);
+          const metadata =
+            v.metadata ?? vesselMetadataState?.metadataRecords.get(numericMmsi);
           const rawRot = v.raw?.rot;
 
           return {
@@ -133,7 +134,6 @@ const Map = () => {
               raim: Boolean(v.raim),
               heading: typeof v.heading === 'number' ? v.heading : undefined,
               timestamp: v.receivedAt,
-              timestampExternal: v.reportedAt ?? v.receivedAt,
               vesselMetadata: metadata,
               layerId: 'ships',
             },
