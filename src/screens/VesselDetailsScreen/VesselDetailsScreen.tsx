@@ -21,54 +21,6 @@ import { useVesselDetails } from '../../components/contexts/VesselDetailsContext
 import { useVesselMqtt } from '../../components/contexts/VesselMqttContext';
 
 /**
- * VesselAISDetails Component
- *
- * Displays extended AIS (Automatic Identification System) data for the selected vessel.
- * This component is shown when the user expands the details section.
- *
- * Data displayed:
- * - Current UTC datetime
- * - Vessel latitude (from GeoJSON coordinates[1])
- * - Vessel longitude (from GeoJSON coordinates[0])
- * - MMSI (Maritime Mobile Service Identity)
- * - Heading in degrees
- *
- * @returns {JSX.Element | null} The detailed vessel information or loading text
- */
-const VesselAISDetails: React.FC = () => {
-  const { vesselData } = useVesselDetails();
-  const properties = vesselData?.properties;
-  const coordinates = vesselData?.geometry?.coordinates;
-
-  if (!properties || !coordinates) return <Text>Loading...</Text>
-
-  return (
-    <View style={styles.detailsView}>
-      <View style={styles.detailRow}>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Datetime UTC</Text>
-        <Text style={typography.body}>{new Date().toUTCString()}</Text>
-      </View>
-      <View style={styles.detailRow}>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Latitude</Text>
-        <Text style={typography.body}>{coordinates[1]}</Text>
-      </View>
-      <View style={styles.detailRow}>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Longitude</Text>
-        <Text style={typography.body}>{coordinates[0]}</Text>
-      </View>
-      <View style={styles.detailRow}>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>IMO / MMSI</Text>
-        <Text style={typography.body}>{properties.mmsi}</Text>
-      </View>
-      <View style={styles.detailRow}>
-        <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Heading</Text>
-        <Text style={typography.body}>{properties.heading}°</Text>
-      </View>
-    </View>
-  );
-};
-
-/**
  * VesselDetailsScreen Component
  *
  * Main component that displays a bottom sheet popup with vessel information when a vessel is tapped on the map.
@@ -93,16 +45,10 @@ const VesselAISDetails: React.FC = () => {
  */
 export const VesselDetailsScreen = () => {
   const { cardVisible, setCardVisible, detailsVisible, setDetailsVisible, vesselData } = useVesselDetails();
-
-  const { vessels } = useVesselMqtt();
- 
   const mmsi = vesselData?.properties ? vesselData.properties.mmsi : null;
-
+  const { vessels, metadata } = useVesselMqtt();
   const liveVessel = mmsi ? vessels[mmsi] : undefined;
-  // const properties = liveVessel?.properties;
-  // const coordinates = liveVessel?.geometry?.coordinates;
-
-  // console.log('>>> liveVessel: ', liveVessel)
+  const liveVesselWithMetadata = mmsi ? metadata[mmsi] : undefined;
 
   /**
    * Determines the button text based on details visibility state
@@ -115,13 +61,7 @@ export const VesselDetailsScreen = () => {
   // Don't render if no vessel is selected
   if (!vesselData || !liveVessel) return null;
 
-  const {
-    sog,
-    cog,
-    receivedAt,
-  } = liveVessel;
-  // Show loading state if data is incomplete
-  // if (!properties || !coordinates) return <Text>Loading...</Text>
+  const { lat, lon, sog, cog, heading, receivedAt, posAcc } = liveVessel;
 
   return (
     <View>
@@ -129,18 +69,27 @@ export const VesselDetailsScreen = () => {
         <View style={styles.vesselCard}>
           {/* Header with MMSI and Close button */}
           <View style={styles.cardHeader}>
-            <Text style={typography.heading4}>MMSI {mmsi}</Text>
+            <Text style={typography.heading4}>{liveVesselWithMetadata ? liveVesselWithMetadata.name : `MMSI: ${mmsi}`}</Text>
             <Pressable onPress={() => { setCardVisible(false); setDetailsVisible(false); }}>
               <Text>Close</Text>
             </Pressable>
           </View>
 
           {/* Active status badge */}
-          <View style={styles.statusBadge}>
-            <Text style={[typography.caption, { color: colors.textInverse }]}>Active</Text>
+          <View style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between' }}>
+            <View style={{...styles.statusBadge, ...((sog || 0) === 0 && { backgroundColor: colors.offline })}}>
+              <Text style={[typography.caption, { color: colors.textInverse }]}>{(sog || 0) > 0 ? 'Active' : 'Stationary'}</Text>
+            </View>
+            <View style={{...styles.statusBadge, ...(!posAcc && { backgroundColor: colors.error })}}>
+              <Text style={[typography.caption, { color: colors.textInverse }]}>{!posAcc ? 'Anomaly' : 'Normal'}</Text>
+            </View>
           </View>
 
           {/* Basic vessel information */}
+          <View style={styles.detailRow}>
+            <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Latitude - Longitude:</Text>
+            <Text style={typography.body}>{lat} - {lon}</Text>
+          </View>
           <View style={styles.detailRow}>
             <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Speed:</Text>
             <Text style={typography.body}>{sog || 0} knots</Text>
@@ -150,22 +99,45 @@ export const VesselDetailsScreen = () => {
             <Text style={typography.body}>{cog || 0}°</Text>
           </View>
           <View style={styles.detailRow}>
+            <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Heading:</Text>
+            <Text style={typography.body}>{heading || 0}°</Text>
+          </View>
+          <View style={styles.detailRow}>
             <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
               Last Update:
             </Text>
-            <Text style={typography.body}>{new Date(receivedAt).toUTCString()}</Text>
+            <Text style={typography.body}>{new Date(receivedAt).toLocaleString()}</Text>
           </View>
 
           {/* Expandable detailed AIS information */}
-          {detailsVisible && <VesselAISDetails />}
+          {detailsVisible && liveVesselWithMetadata && (
+            <View style={styles.detailsView}>
+              <View style={styles.detailRow}>
+                <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Destination</Text>
+                <Text style={typography.body}>{liveVesselWithMetadata.destination}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Draught</Text>
+                <Text style={typography.body}>{liveVesselWithMetadata.draught}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Call Sign</Text>
+                <Text style={typography.body}>{liveVesselWithMetadata.callSign}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Ship Type</Text>
+                <Text style={typography.body}>{liveVesselWithMetadata.type}</Text>
+              </View>
+            </View>
+          )}
 
           {/* Toggle button for expanded details */}
-          <Button
+          {liveVesselWithMetadata && <Button
             title={changeText()}
             variant="primary"
             size="medium"
             onPress={() => setDetailsVisible(!detailsVisible)}
-          />
+          />}
         </View>
       )}
     </View>
@@ -183,17 +155,6 @@ export const VesselDetailsScreen = () => {
  * - detailsView: Container for expanded AIS details
  */
 const styles = StyleSheet.create({
-  /** Unused - legacy container style */
-  container: {
-    flex: 1,
-  },
-  /** Unused - legacy map placeholder style */
-  mapPlaceholder: {
-    flex: 1,
-    backgroundColor: colors.water,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   /**
    * Main vessel card container
    * - Positioned absolutely at bottom of screen
