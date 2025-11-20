@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
-import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaWrapper } from '../../components/common/SafeAreaWrapper';
 import { Button } from '../../components/common/Button';
+import { useAppContext } from '../../contexts';
 import { colors, spacing, typography } from '../../styles';
-import { usePermissions } from '../../hooks';
-import { RESULTS } from 'react-native-permissions';
+import { logger } from '../../utils/logger';
 
 const Licenses = () => {
   return (
@@ -17,42 +18,25 @@ const Licenses = () => {
 };
 
 export const SettingsScreen = () => {
-  const appState = React.useRef(AppState.currentState);
-  const [appStateVisible, setAppStateVisible] = React.useState(appState.current);
   const [licencesVisible, setLicencesVisible] = React.useState(false);
-  const [notificationsEnabled, setNotifications] = React.useState(false);
-  const [locationEnabled, setLocation] = React.useState(false);
+  
+  const { 
+    permissions,
+    hasNotificationPermission,
+    hasLocationPermission,
+    isNotificationBlocked,
+    isLocationBlocked,
+    openSettings: openSystemSettings,
+    checkPermissions,
+  } = useAppContext();
 
-  const { hasNotificationPermission, permissionState, checkPermissions, openSettings } =
-    usePermissions();
-
-  useEffect(() => {
-    if (permissionState.notification === RESULTS.GRANTED) {
-      setLocation(true);
-    }
-    if (permissionState.location === RESULTS.GRANTED) {
-      setNotifications(true);
-    }
-    const sub = AppState.addEventListener('change', async nextAppState => {
-      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        console.log('App has come to the foreground!');
-        await checkPermissions();
-        console.log(hasNotificationPermission);
-        if (permissionState.notification === RESULTS.GRANTED) {
-          setLocation(true);
-        }
-        if (permissionState.location === RESULTS.GRANTED) {
-          setNotifications(true);
-        }
-      }
-      appState.current = nextAppState;
-      setAppStateVisible(appState.current);
-      console.log('AppState', appState.current);
-    });
-    return () => {
-      sub.remove();
-    };
-  }, []);
+  // Check permissions when screen comes into focus
+  // This runs every time the user navigates to this screen or returns from system settings
+  useFocusEffect(
+    useCallback(() => {
+      checkPermissions();
+    }, [checkPermissions])
+  );
 
   const showLicences = () => {
     setLicencesVisible(true);
@@ -60,6 +44,105 @@ export const SettingsScreen = () => {
 
   const handleBack = () => {
     setLicencesVisible(false);
+  };
+
+  const handleNotificationToggle = async (value: boolean) => {
+    try {
+      if (value) {
+        // User wants to enable notifications - guide to system settings
+        const title = isNotificationBlocked ? 'Permission Blocked' : 'Enable Notifications';
+        const message = isNotificationBlocked 
+          ? 'Notification permission is blocked. Please enable it in your device settings.'
+          : 'Please enable notifications in your device settings.';
+        
+        Alert.alert(
+          title,
+          message,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Open Settings', 
+              onPress: async () => {
+                await openSystemSettings();
+                setTimeout(() => checkPermissions(), 500);
+              }
+            },
+          ]
+        );
+      } else {
+        // User wants to disable notifications - guide to system settings
+        Alert.alert(
+          'Disable Notifications',
+          'To disable notifications, please go to your device settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Open Settings', 
+              onPress: async () => {
+                await openSystemSettings();
+                setTimeout(() => checkPermissions(), 500);
+              }
+            },
+          ]
+        );
+      }
+    } catch (err) {
+      logger.error('Error in handleNotificationToggle:', err);
+      Alert.alert(
+        'Error',
+        'Failed to update notification permission. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const handleLocationToggle = async (value: boolean) => {
+    try {
+      if (value) {
+        // User wants to enable location
+        const title = isLocationBlocked ? 'Permission Blocked' : 'Enable Location';
+        const message = isLocationBlocked
+          ? 'Location permission is blocked. Please enable it in your device settings.'
+          : 'Please enable location services in your device settings.';
+        
+        Alert.alert(
+          title,
+          message,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Open Settings', 
+              onPress: async () => {
+                await openSystemSettings();
+                setTimeout(() => checkPermissions(), 500);
+              }
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Disable Location',
+          'To disable location services, please go to your device settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Open Settings', 
+              onPress: async () => {
+                await openSystemSettings();
+                setTimeout(() => checkPermissions(), 500);
+              }
+            },
+          ]
+        );
+      }
+    } catch (err) {
+      logger.error('Error in handleLocationToggle:', err);
+      Alert.alert(
+        'Error',
+        'Failed to update location permission. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   return (
@@ -84,19 +167,43 @@ export const SettingsScreen = () => {
       {!licencesVisible && (
         <ScrollView style={styles.container}>
           <Text style={[typography.heading2, styles.header]}>Settings</Text>
-          <Text style={[typography.heading5, styles.sectionTitle]}>Preferences</Text>
-          <Pressable onPress={openSettings}>
-            <View style={styles.item}>
+          <Text style={[typography.heading5, styles.sectionTitle]}>Permissions</Text>
+          <View style={styles.item}>
+            <View style={styles.itemContent}>
               <Text style={typography.body}>Push Notifications</Text>
-              <Text style={typography.body}>{notificationsEnabled ? 'Enabled' : 'Disabled'}</Text>
+              <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 4 }]}>  
+                {isNotificationBlocked 
+                  ? 'Blocked - Open Settings' 
+                  : hasNotificationPermission 
+                  ? 'Enabled' 
+                  : 'Disabled'}
+              </Text>
             </View>
-          </Pressable>
-          <Pressable onPress={openSettings}>
-            <View style={styles.item}>
-              <Text style={typography.body}>Location services</Text>
-              <Text style={typography.body}>{locationEnabled ? 'Enabled' : 'Disabled'}</Text>
+            <Switch
+              value={hasNotificationPermission}
+              onValueChange={handleNotificationToggle}
+              trackColor={{ false: colors.textSecondary, true: colors.primary }}
+              thumbColor={hasNotificationPermission ? colors.surface : colors.surface}
+            />
+          </View>
+          <View style={styles.item}>
+            <View style={styles.itemContent}>
+              <Text style={typography.body}>Location Services</Text>
+              <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 4 }]}>
+                {isLocationBlocked 
+                  ? 'Blocked - Open Settings' 
+                  : hasLocationPermission 
+                  ? 'Enabled' 
+                  : 'Disabled'}
+              </Text>
             </View>
-          </Pressable>
+            <Switch
+              value={hasLocationPermission}
+              onValueChange={handleLocationToggle}
+              trackColor={{ false: colors.textSecondary, true: colors.primary }}
+              thumbColor={hasLocationPermission ? colors.surface : colors.surface}
+            />
+          </View>
           <Text style={[typography.heading5, styles.sectionTitle]}>About</Text>
           <View style={styles.item}>
             <Text style={typography.body}>Version</Text>
@@ -111,7 +218,13 @@ export const SettingsScreen = () => {
           <Button
             title="Clear Cache"
             variant="outline"
-            onPress={openSettings}
+            onPress={() => {
+              Alert.alert(
+                'Clear Cache',
+                'This feature will be available soon.',
+                [{ text: 'OK' }]
+              );
+            }}
             style={{ borderColor: colors.error, marginTop: spacing.large }}
             textStyle={{ color: colors.error }}
           />
@@ -142,5 +255,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     marginBottom: spacing.tiny,
     borderRadius: 8,
+  },
+  itemContent: {
+    flex: 1,
+    marginRight: spacing.medium,
   },
 });

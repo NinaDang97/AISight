@@ -8,15 +8,18 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { RootNavigator } from './src/navigation/navigators/RootNavigator';
+import { AppProvider } from './src/contexts';
 import { navigationRef } from './src/navigation/helpers/navigationRef';
+import { RootNavigator } from './src/navigation/navigators/RootNavigator';
 
 function App(): React.JSX.Element {
   return (
     <SafeAreaProvider>
-      <NavigationContainer ref={navigationRef}>
-        <RootNavigator />
-      </NavigationContainer>
+      <AppProvider>
+        <NavigationContainer ref={navigationRef}>
+          <RootNavigator />
+        </NavigationContainer>
+      </AppProvider>
     </SafeAreaProvider>
   );
 }

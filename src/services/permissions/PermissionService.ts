@@ -3,6 +3,8 @@ import {
   check,
   request,
   openSettings,
+  checkNotifications,
+  requestNotifications,
   PERMISSIONS,
   RESULTS,
 } from 'react-native-permissions';
@@ -44,22 +46,38 @@ class PermissionService implements PermissionServiceInterface {
         }
         return RESULTS.DENIED;
       } else {
-        // Android 13+ (API 33+) requires POST_NOTIFICATIONS permission
+        // Use react-native-permissions' built-in notification check
+        // This handles Android 13+ POST_NOTIFICATIONS automatically
         const apiLevel = getAndroidAPILevel();
         if (apiLevel >= 33) {
-          // For Android 13+, check POST_NOTIFICATIONS
+          // For Android 13+, use checkNotifications which properly handles POST_NOTIFICATIONS
           try {
-            const result = await check('android.permission.POST_NOTIFICATIONS' as any);
-            logger.info('Notification permission status (Android 13+):', result);
-            return result;
+            const {status} = await checkNotifications();
+            logger.info('Notification permission status (Android 13+):', status);
+            return status;
           } catch (err) {
-            logger.warn('POST_NOTIFICATIONS check failed, assuming granted for older API');
-            return RESULTS.GRANTED;
+            logger.error('checkNotifications failed:', err);
+            // Fallback to manual check
+            const result = await check('android.permission.POST_NOTIFICATIONS' as any);
+            logger.info('Fallback notification check:', result);
+            return result;
           }
         } else {
-          // For Android < 13, notifications are always granted
-          logger.info('Notification permission status (Android < 13): granted by default');
-          return RESULTS.GRANTED;
+          // For Android < 13, notifications don't require runtime permission
+          // But we can still check if they're enabled at the channel level
+          try {
+            const {status} = await checkNotifications();
+            logger.info('Notification permission status (Android < 13):', status);
+            // For Android < 13, checkNotifications returns UNAVAILABLE if blocked in settings
+            // or GRANTED if enabled
+            if (status === RESULTS.UNAVAILABLE || status === RESULTS.BLOCKED) {
+              return RESULTS.DENIED;
+            }
+            return status;
+          } catch (err) {
+            logger.error('checkNotifications failed on Android < 13:', err);
+            return RESULTS.UNAVAILABLE;
+          }
         }
       }
     } catch (error) {
@@ -87,71 +105,6 @@ class PermissionService implements PermissionServiceInterface {
       return result;
     } catch (error) {
       logger.error('Error checking location permission:', error);
-      return RESULTS.UNAVAILABLE;
-    }
-  }
-
-  /**
-   * Request notification permission
-   * Note: On Android < 13, notifications don't require runtime permission
-   */
-  async requestNotificationPermission(): Promise<PermissionStatus> {
-    try {
-      // Mark as asked
-      await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATION_ASKED, 'true');
-
-      if (Platform.OS === 'ios') {
-        // For iOS, we just mark it as granted after user interaction
-        // In a real app, you'd set up push notifications here
-        logger.info('Notification permission granted (iOS - manual tracking)');
-        return RESULTS.GRANTED;
-      } else {
-        // Android 13+ (API 33+) requires POST_NOTIFICATIONS permission
-        const apiLevel = getAndroidAPILevel();
-        if (apiLevel >= 33) {
-          try {
-            const result = await request('android.permission.POST_NOTIFICATIONS' as any);
-            logger.info('Notification permission request result (Android 13+):', result);
-            return result;
-          } catch (err) {
-            logger.warn('POST_NOTIFICATIONS request failed, assuming granted');
-            return RESULTS.GRANTED;
-          }
-        } else {
-          // For Android < 13, notifications are always granted
-          logger.info('Notification permission granted (Android < 13): no permission needed');
-          return RESULTS.GRANTED;
-        }
-      }
-    } catch (error) {
-      logger.error('Error requesting notification permission:', error);
-      // For Android, assume granted as fallback
-      if (Platform.OS === 'android') {
-        return RESULTS.GRANTED;
-      }
-      return RESULTS.UNAVAILABLE;
-    }
-  }
-
-  /**
-   * Request location permission
-   */
-  async requestLocationPermission(): Promise<PermissionStatus> {
-    try {
-      const permission =
-        Platform.OS === 'ios'
-          ? PERMISSIONS.IOS.LOCATION_WHEN_IN_USE
-          : PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION;
-
-      const result = await request(permission);
-      logger.info('Location permission request result:', result);
-
-      // Mark as asked
-      await AsyncStorage.setItem(STORAGE_KEYS.LOCATION_ASKED, 'true');
-
-      return result;
-    } catch (error) {
-      logger.error('Error requesting location permission:', error);
       return RESULTS.UNAVAILABLE;
     }
   }
