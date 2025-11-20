@@ -19,6 +19,8 @@ export const colors = {
   success: '#388E3C',
   warning: '#F57C00',
   info: '#0288D1',
+  purple: '#9C27B0',
+  orange: '#FF9800',
   
   // Text colors
   textPrimary: '#212121',

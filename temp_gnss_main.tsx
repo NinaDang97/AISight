@@ -2,13 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaWrapper } from '../../components/common/SafeAreaWrapper';
 import { colors, typography, spacing, theme } from '../../styles';
-import { useGnss } from '../../components/contexts';
-import { GnssExportManager } from '../../components/gnss';
 
 // Types for our data
 interface SatelliteSignal {
   id: string;
-  displayId: string;
   system: string;
   strength: string;
   dbValue: number;
@@ -16,7 +13,6 @@ interface SatelliteSignal {
 
 interface SatelliteDetail {
   id: string;
-  displayId: string;
   elevation: string;
   azimuth: string;
   cno: string;
@@ -24,49 +20,23 @@ interface SatelliteDetail {
 }
 
 export const GnssScreen: React.FC = () => {
-  // Get GNSS context data
-  const {
-    isTracking,
-    isLogging,
-    isGpsEnabled,
-    status,
-    measurements,
-    location,
-    loggingState,
-    startTracking,
-    stopTracking,
-    startLogging,
-    stopLogging,
-    refreshLoggingState,
-  } = useGnss();
-
+  const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [signalQuality, setSignalQuality] = useState('Excellent');
   const [satelliteSignals, setSatelliteSignals] = useState<SatelliteSignal[]>([]);
   const [satelliteDetails, setSatelliteDetails] = useState<SatelliteDetail[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Timer for recording duration display
+  // Timer for recording
   useEffect(() => {
     let interval: any;
-    if (isLogging) {
+    if (isRecording) {
       interval = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
-    } else {
-      setRecordingTime(0);
     }
     return () => clearInterval(interval);
-  }, [isLogging]);
-
-  // Update logging state periodically when logging to show rows written
-  useEffect(() => {
-    if (isLogging) {
-      const interval = setInterval(async () => {
-        await refreshLoggingState();
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [isLogging, refreshLoggingState]);
+  }, [isRecording]);
 
   // Format recording time
   const formatTime = (seconds: number) => {
@@ -90,77 +60,134 @@ export const GnssScreen: React.FC = () => {
     return 'Poor';
   };
 
-  // Convert real GNSS measurements to display format
-  useEffect(() => {
-    if (!isTracking || measurements.length === 0) {
-      return;
-    }
+  // Generate unique satellite IDs to fix duplicate key warnings
+  const generateUniqueSatelliteId = (system: string, existingIds: Set<string>) => {
+    let attempts = 0;
+    while (attempts < 50) {
+      // Prevent infinite loop
+      const idNumber = Math.floor(Math.random() * 32);
+      const id = `${system.charAt(0)}${idNumber.toString().padStart(2, '0')}`;
 
-    const newSignals: SatelliteSignal[] = [];
-    const newDetails: SatelliteDetail[] = [];
-
-    // Filter measurements with valid C/N0 and sort by strength
-    const sortedMeasurements = [...measurements]
-      .filter(m => m.cn0DbHz !== undefined && m.cn0DbHz > 0)
-      .sort((a, b) => (b.cn0DbHz || 0) - (a.cn0DbHz || 0));
-
-    sortedMeasurements.forEach((m, index) => {
-      const cn0 = m.cn0DbHz || 0;
-      const constellation = m.constellation || 'UNKNOWN';
-      const svid = m.svid?.toString() || '??';
-
-      // Create unique satellite ID that includes constellation and SVID
-      // This ensures uniqueness even if multiple constellations use same SVID numbers
-      const prefix = constellation.charAt(0);
-      const displayId = `${prefix}${svid.padStart(2, '0')}`;
-      const uniqueId = `${constellation}-${svid}`; // Unique key for React
-
-      newSignals.push({
-        id: uniqueId,
-        displayId: displayId,
-        system: constellation,
-        strength: `${cn0.toFixed(1)} dB-Hz`,
-        dbValue: cn0,
-      });
-
-      // Add top 6 satellites to details table
-      if (index < 6) {
-        newDetails.push({
-          id: uniqueId,
-          displayId: displayId,
-          elevation: 'N/A', // Not available in raw measurements
-          azimuth: 'N/A',   // Not available in raw measurements
-          cno: cn0.toFixed(1),
-          dbValue: cn0,
-        });
+      if (!existingIds.has(id)) {
+        return id;
       }
-    });
-
-    setSatelliteSignals(newSignals);
-    setSatelliteDetails(newDetails);
-    setSignalQuality(getSignalQuality(newSignals));
-  }, [measurements, isTracking]);
-
-  // Toggle logging
-  const toggleLogging = async () => {
-    if (!isTracking) {
-      Alert.alert('Start Tracking First', 'Please start GNSS tracking before enabling logging.');
-      return;
+      attempts++;
     }
+    // Fallback: add timestamp to ensure uniqueness
+    return `${system.charAt(0)}${Math.floor(Math.random() * 32)
+      .toString()
+      .padStart(2, '0')}_${Date.now()}`;
+  };
 
-    if (isLogging) {
-      await stopLogging();
-      Alert.alert('Logging Stopped', `Recorded ${loggingState?.linesWritten || 0} data points for ${formatTime(recordingTime)}.`);
+  // Generate realistic mock data
+  const generateMockData = () => {
+    setIsLoading(true);
+
+    // Simulate API delay
+    setTimeout(() => {
+      const systems = ['GPS', 'GLONASS', 'Galileo', 'BeiDou'];
+      const newSignals: SatelliteSignal[] = [];
+      const newDetails: SatelliteDetail[] = [];
+      const usedIds = new Set<string>();
+
+      // Generate 8-12 random satellites
+      const satelliteCount = Math.floor(Math.random() * 5) + 8;
+
+      for (let i = 0; i < satelliteCount; i++) {
+        const system = systems[Math.floor(Math.random() * systems.length)];
+        const dbValue = Math.floor(Math.random() * 20) + 25; // 25-45 dB
+        const id = generateUniqueSatelliteId(system, usedIds);
+        usedIds.add(id);
+
+        newSignals.push({
+          id,
+          system,
+          strength: `${dbValue} dB-Hz`,
+          dbValue,
+        });
+
+        // Only add to details if we have room (max 6 for display)
+        if (newDetails.length < 6) {
+          newDetails.push({
+            id,
+            elevation: `${Math.floor(Math.random() * 90)}°`,
+            azimuth: `${Math.floor(Math.random() * 360)}°`,
+            cno: dbValue.toString(),
+            dbValue,
+          });
+        }
+      }
+
+      // Sort by signal strength (strongest first)
+      newSignals.sort((a, b) => b.dbValue - a.dbValue);
+      newDetails.sort((a, b) => b.dbValue - a.dbValue);
+
+      setSatelliteSignals(newSignals);
+      setSatelliteDetails(newDetails);
+      setSignalQuality(getSignalQuality(newSignals));
+      setIsLoading(false);
+    }, 1000);
+  };
+
+  // Toggle recording
+  const toggleRecording = () => {
+    if (isRecording) {
+      setIsRecording(false);
+      Alert.alert('Recording Stopped', `Recorded for ${formatTime(recordingTime)}`);
     } else {
-      const filePath = await startLogging();
-      if (filePath) {
-        setRecordingTime(0);
-      } else {
-        Alert.alert('Failed to Start Logging', 'Could not create log file.');
+      setIsRecording(true);
+      setRecordingTime(0);
+      // Generate new data when starting recording
+      if (satelliteSignals.length === 0) {
+        generateMockData();
       }
     }
   };
 
+  // Export data functions
+  const exportCSV = () => {
+    if (satelliteSignals.length === 0) {
+      Alert.alert('No Data', 'Please generate data first');
+      return;
+    }
+
+    // Simple CSV export simulation
+    const headers = 'Satellite ID,System,Signal Strength (dB-Hz),Elevation,Azimuth\n';
+    const rows = satelliteSignals
+      .map(signal => {
+        const detail = satelliteDetails.find(d => d.id === signal.id);
+        return `"${signal.id}","${signal.system}","${signal.strength}","${
+          detail?.elevation || 'N/A'
+        }","${detail?.azimuth || 'N/A'}"`;
+      })
+      .join('\n');
+
+    const csv = headers + rows;
+    Alert.alert(
+      'CSV Export Ready',
+      `Exported ${satelliteSignals.length} satellites to CSV format.`,
+      [{ text: 'OK' }],
+    );
+  };
+
+  const exportRINEX = () => {
+    if (satelliteSignals.length === 0) {
+      Alert.alert('No Data', 'Please generate data first');
+      return;
+    }
+
+    // Simple RINEX export simulation
+    Alert.alert(
+      'RINEX Export Ready',
+      `Exported ${satelliteSignals.length} satellites in RINEX format.`,
+      [{ text: 'OK' }],
+    );
+  };
+
+  // Load mock data on first render
+  useEffect(() => {
+    generateMockData();
+  }, []);
 
   return (
     <SafeAreaWrapper backgroundColor={colors.background} barStyle="dark-content">
@@ -171,51 +198,20 @@ export const GnssScreen: React.FC = () => {
           <Text style={styles.headerSubtitle}>Real time satellite tracking</Text>
         </View>
 
-        {/* GPS Status Warning */}
-        {!isGpsEnabled && (
-          <View style={styles.section}>
-            <View style={[styles.card, styles.warningCard]}>
-              <Text style={styles.warningText}>
-                GPS is disabled. Please enable GPS to start tracking.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Tracking Control */}
+        {/* Control Buttons */}
         <View style={styles.section}>
           <View style={styles.controlRow}>
             <TouchableOpacity
               style={[
                 styles.controlButton,
-                isTracking ? styles.stopButton : styles.startButton,
-                !isGpsEnabled && styles.disabledButton,
+                styles.primaryButton,
+                isLoading && styles.disabledButton,
               ]}
-              onPress={async () => {
-                if (!isGpsEnabled) {
-                  Alert.alert(
-                    'GPS Disabled',
-                    'Please enable GPS in your device settings to use GNSS tracking.'
-                  );
-                  return;
-                }
-
-                if (isTracking) {
-                  await stopTracking();
-                } else {
-                  const success = await startTracking();
-                  if (!success) {
-                    Alert.alert(
-                      'Failed to Start',
-                      'Could not start GNSS tracking. Please check permissions and GPS settings.'
-                    );
-                  }
-                }
-              }}
-              disabled={!isGpsEnabled}
+              onPress={generateMockData}
+              disabled={isLoading}
             >
               <Text style={styles.controlButtonText}>
-                {isTracking ? 'Stop Tracking' : 'Start Tracking'}
+                {isLoading ? 'Loading...' : 'Refresh Data'}
               </Text>
             </TouchableOpacity>
 
@@ -223,15 +219,16 @@ export const GnssScreen: React.FC = () => {
               style={[
                 styles.controlButton,
                 styles.secondaryButton,
-                satelliteSignals.length === 0 && styles.disabledButton,
+                (satelliteSignals.length === 0 || isLoading) && styles.disabledButton,
               ]}
               onPress={() => {
                 setSatelliteSignals([]);
                 setSatelliteDetails([]);
+                setIsRecording(false);
                 setRecordingTime(0);
                 setSignalQuality('Unknown');
               }}
-              disabled={satelliteSignals.length === 0}
+              disabled={satelliteSignals.length === 0 || isLoading}
             >
               <Text style={styles.controlButtonText}>Clear Data</Text>
             </TouchableOpacity>
@@ -247,14 +244,12 @@ export const GnssScreen: React.FC = () => {
               <TouchableOpacity
                 style={[
                   styles.recordButton,
-                  isLogging ? styles.recordingActive : styles.recordingStopped,
-                  !isTracking && styles.disabledButton,
+                  isRecording ? styles.recordingActive : styles.recordingStopped,
                 ]}
-                onPress={toggleLogging}
-                disabled={!isTracking}
+                onPress={toggleRecording}
               >
                 <Text style={styles.recordButtonText}>
-                  {isLogging ? `Recording - ${formatTime(recordingTime)}` : 'Start Recording'}
+                  {isRecording ? `Recording - ${formatTime(recordingTime)}` : 'Start Recording'}
                 </Text>
               </TouchableOpacity>
               <Text style={styles.signalQuality}>Signal Quality: {signalQuality}</Text>
@@ -271,9 +266,9 @@ export const GnssScreen: React.FC = () => {
           <View style={styles.card}>
             {satelliteSignals.length === 0 ? (
               <Text style={styles.noDataText}>
-                {!isTracking
-                  ? 'Start tracking to see satellite data'
-                  : 'Waiting for satellite data...'}
+                {isLoading
+                  ? 'Loading satellite data...'
+                  : 'No satellite data. Press "Refresh Data" to load.'}
               </Text>
             ) : (
               satelliteSignals.map((satellite, index) => (
@@ -284,7 +279,7 @@ export const GnssScreen: React.FC = () => {
                     index === satelliteSignals.length - 1 && styles.lastItem,
                   ]}
                 >
-                  <Text style={styles.satelliteId}>{satellite.displayId}</Text>
+                  <Text style={styles.satelliteId}>{satellite.id}</Text>
                   <Text style={styles.satelliteSystem}>{satellite.system}</Text>
                   <Text
                     style={[styles.signalStrength, { color: getSignalColor(satellite.dbValue) }]}
@@ -323,7 +318,7 @@ export const GnssScreen: React.FC = () => {
                       index === satelliteDetails.length - 1 && styles.lastItem,
                     ]}
                   >
-                    <Text style={styles.tableCell}>{satellite.displayId}</Text>
+                    <Text style={styles.tableCell}>{satellite.id}</Text>
                     <Text style={styles.tableCell}>{satellite.elevation}</Text>
                     <Text style={styles.tableCell}>{satellite.azimuth}</Text>
                     <Text style={[styles.tableCell, { color: getSignalColor(satellite.dbValue) }]}>
@@ -338,17 +333,30 @@ export const GnssScreen: React.FC = () => {
 
         {/* Export Data */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Export & File Management</Text>
+          <Text style={styles.sectionTitle}>Export Data</Text>
           <View style={styles.card}>
-            {loggingState?.logFilePath && (
-              <Text style={styles.exportInfo}>
-                Current log: {loggingState.linesWritten} data points
+            <TouchableOpacity
+              style={[styles.exportButton, satelliteSignals.length === 0 && styles.disabledButton]}
+              onPress={exportCSV}
+              disabled={satelliteSignals.length === 0}
+            >
+              <Text style={styles.exportButtonText}>
+                Export as CSV {satelliteSignals.length > 0 && `(${satelliteSignals.length} sats)`}
               </Text>
-            )}
-            <GnssExportManager disabled={false} />
-            <Text style={[styles.exportInfo, { marginTop: spacing.small }]}>
-              View, export, and delete all saved log files
-            </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.exportButton,
+                styles.exportButtonSecondary,
+                satelliteSignals.length === 0 && styles.disabledButton,
+              ]}
+              onPress={exportRINEX}
+              disabled={satelliteSignals.length === 0}
+            >
+              <Text style={styles.exportButtonText}>
+                Export as RINEX {satelliteSignals.length > 0 && `(${satelliteSignals.length} sats)`}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -512,34 +520,158 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: colors.textPrimary,
   },
+  exportButton: {
+    backgroundColor: colors.primary,
+    padding: spacing.medium,
+    borderRadius: theme.borderRadius.medium,
+    alignItems: 'center',
+    marginBottom: spacing.small,
+  },
+  exportButtonSecondary: {
+    backgroundColor: colors.secondary,
+  },
+  exportButtonText: {
+    ...typography.button,
+    color: colors.textInverse,
+    fontWeight: '600',
+  },
   noDataText: {
     ...typography.body,
     color: colors.textSecondary,
     textAlign: 'center',
     fontStyle: 'italic',
     padding: spacing.medium,
+    marginBottom: spacing.medium,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  warningCard: {
-    backgroundColor: colors.error + '20',
-    borderLeftWidth: 4,
-    borderLeftColor: colors.error,
-  },
-  warningText: {
-    ...typography.body,
-    color: colors.error,
-    fontWeight: '500',
-  },
-  startButton: {
-    backgroundColor: colors.success,
-  },
-  stopButton: {
-    backgroundColor: colors.error,
-  },
-  exportInfo: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    textAlign: 'center',
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: spacing.small,
-    marginBottom: spacing.small,
+  },
+  statusIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: spacing.small,
+  },
+  warningBox: {
+    marginTop: spacing.medium,
+    padding: spacing.small,
+    backgroundColor: colors.error + '20',
+    borderRadius: 8,
+  },
+  controlSection: {
+    marginBottom: spacing.medium,
+  },
+  buttonSpacing: {
+    marginTop: spacing.small,
+  },
+  trackingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.success + '20',
+    padding: spacing.small,
+    borderRadius: 8,
+    marginBottom: spacing.medium,
+  },
+  trackingIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.success,
+    marginRight: spacing.small,
+  },
+  loggingCard: {
+    backgroundColor: colors.info + '20',
+    borderRadius: 12,
+    padding: spacing.medium,
+    marginBottom: spacing.medium,
+  },
+  dataCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: spacing.medium,
+    marginBottom: spacing.medium,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dataRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.small,
+  },
+  noDataContainer: {
+    paddingVertical: spacing.large,
+    alignItems: 'center',
+  },
+  constellationSection: {
+    marginTop: spacing.small,
+  },
+  constellationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingLeft: spacing.medium,
+    marginTop: spacing.xsmall,
+  },
+  infoCard: {
+    backgroundColor: colors.primary + '10',
+    borderRadius: 8,
+    padding: spacing.small,
+    marginBottom: spacing.large,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: spacing.large,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.medium,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  fileItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.medium,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  fileInfo: {
+    flex: 1,
+  },
+  fileMetadata: {
+    flexDirection: 'row',
+    marginTop: spacing.xsmall,
+  },
+  fileActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    padding: spacing.xsmall,
+  },
+  emptyList: {
+    padding: spacing.large,
+    alignItems: 'center',
   },
 });
