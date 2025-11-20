@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaWrapper } from '../../../components/common/SafeAreaWrapper';
 import { Button } from '../../../components/common/Button';
 import { colors, typography, spacing } from '../../../styles';
@@ -7,11 +7,13 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../../navigation/types';
 import { Routes } from '../../../navigation/routes';
+import { useVesselMqtt } from '../../../components/contexts/VesselMqttContext';
 
 type WelcomeScreenNavigationProp = StackNavigationProp<RootStackParamList>;
 
 export const WelcomeScreen: React.FC = () => {
   const navigation = useNavigation<WelcomeScreenNavigationProp>();
+  const { status } = useVesselMqtt();
 
   const handleGetStarted = () => {
     // Navigate directly to the Main tab navigator
@@ -36,6 +38,9 @@ export const WelcomeScreen: React.FC = () => {
           <Text style={styles.description}>
             Track marine vessels in real-time, access detailed information, and stay updated with the
             latest maritime traffic data.
+          </Text>
+          <Text style={styles.description}>
+            Vessel live status: {status === 'connected' ? 'Connected' : status}
           </Text>
 
           <View style={styles.featuresContainer}>
