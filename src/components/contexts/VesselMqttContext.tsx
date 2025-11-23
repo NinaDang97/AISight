@@ -37,7 +37,6 @@ type VesselStreamRecord = {
   lat: number;
   receivedAt: number;
   raw: Record<string, unknown>;
-  metadata?: VesselMetadataRecord;
 };
 
 type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error';
@@ -170,7 +169,6 @@ export const VesselMqttProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               raim: parsed.raim,
               receivedAt: Date.now(),
               raw: parsed,
-              metadata: existing?.metadata,
             };
 
             return {
@@ -178,7 +176,8 @@ export const VesselMqttProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               [mmsi]: updated,
             };
           });
-        } else if (isMetadataTopic) {
+        }
+        if (isMetadataTopic) {
           const metadataRecord: VesselMetadataRecord = {
             timestamp: parsed.timestamp,
             destination: parsed.destination,
@@ -200,24 +199,6 @@ export const VesselMqttProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             ...prev,
             [mmsi]: metadataRecord,
           }));
-
-          setVessels(prev => {
-            const existing = prev[mmsi];
-            const updated: VesselStreamRecord = {
-              ...(existing ?? {
-                mmsi,
-                topic,
-                receivedAt: Date.now(),
-                raw: {},
-              }),
-              metadata: metadataRecord,
-            };
-
-            return {
-              ...prev,
-              [mmsi]: updated,
-            };
-          });
         }
       } catch (err) {
         console.log('[mqtt] failed to parse message', err);
