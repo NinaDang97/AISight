@@ -9,64 +9,129 @@ import {
 import { useGnss } from '../components/contexts';
 import { GnssLocation } from '../native/GnssModule';
 
+// meters threshold under which we ignore small movement
+const DISTANCE_THRESHOLD_METERS = 5;
+// limit track length to avoid unbounded memory growth
+const TRACK_MAX_POINTS = 500;
 
-
-const lines: GeoJSON.FeatureCollection<GeoJSON.LineString, { id: string }> = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      properties: { id: 'track1' },
-      geometry: {
-        coordinates: [
-          [23.849147381997057, 61.45376934970855],
-          [23.847513736389175, 61.453376821960234],
-          [23.847615693417254, 61.45297311793291],
-          [23.84812547855833, 61.45231186728137],
-          [23.848453197577157, 61.45194991361575],
-        ],
-        type: 'LineString',
-      },
-    },
-  ],
+const haversineMeters = (lon1: number, lat1: number, lon2: number, lat2: number) => {
+  const toRad = (v: number) => (v * Math.PI) / 180;
+  const R = 6371000; // Earth radius in meters
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 };
+
+type GnssPointState = GeoJSON.FeatureCollection<GeoJSON.Point, GnssLocation>;
+
+type GnssTrackState = GeoJSON.FeatureCollection<GeoJSON.LineString>;
 
 interface GnssLayerProps {
   gnssEnabled: boolean;
 }
 
-type GnssTrackState = GeoJSON.FeatureCollection<GeoJSON.Point, GnssLocation>;
-
 const GnssLayer = ({ gnssEnabled }: GnssLayerProps) => {
   const { location, isTracking } = useGnss();
-  const [trackState, setTrackState] = useState<GnssTrackState>({
+  const [trackPointState, setTrackPointState] = useState<GnssPointState>({
     type: 'FeatureCollection',
     features: [],
   });
+  const [trackLineState, setTrackLineState] = useState<GnssTrackState>({
+    type: 'FeatureCollection',
+    features: [],
+  });
+  const [trackInitialized, setTrackInitialized] = useState<boolean>(false);
 
   useEffect(() => {
-    // You can use the GNSS location data here if needed
-    if (isTracking) {
-      console.log('GNSS Location:', location);
-      if (location) {
-        trackState.features.push({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: [location.longitude, location.latitude] },
-          properties: location,
-        });
-        setTrackState({ ...trackState });
+    if (!isTracking || !location) return;
+
+    console.log('GNSS Location:', location);
+
+    // ignore too small movements
+    if (trackPointState.features.length > 1) {
+      const prevLng =
+        trackPointState.features[trackPointState.features.length - 1].geometry.coordinates[0];
+      const prevLat =
+        trackPointState.features[trackPointState.features.length - 1].geometry.coordinates[1];
+      const currLng = location.longitude;
+      const currLat = location.latitude;
+      if (haversineMeters(prevLng, prevLat, currLng, currLat) < DISTANCE_THRESHOLD_METERS) {
+        return;
       }
     }
+
+    const userLocationFeature: GeoJSON.Feature<GeoJSON.Point, GnssLocation> = {
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [location.longitude, location.latitude] },
+      properties: location,
+    };
+
+    setTrackPointState(prevState => {
+      const nextFeatures = [...prevState.features, userLocationFeature];
+      // cap length
+      const sliceStart = Math.max(0, nextFeatures.length - TRACK_MAX_POINTS);
+      const capped = nextFeatures.slice(sliceStart);
+      return { type: 'FeatureCollection', features: capped };
+    });
   }, [isTracking, location]);
+
+  useEffect(() => {
+    if (!gnssEnabled || trackPointState.features.length < 2) return;
+
+    if (!trackInitialized) {
+      setTrackLineState({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: trackPointState.features.map(f => f.geometry.coordinates),
+            },
+            properties: {},
+          },
+        ],
+      });
+      setTrackInitialized(true);
+    } else if (trackPointState.features.length > 2 && trackLineState.features.length > 0) {
+      setTrackLineState(prevState => {
+        const existingCoords = prevState.features[0].geometry.coordinates;
+        const newLocation =
+          trackPointState.features[trackPointState.features.length - 1].geometry.coordinates;
+        const existingFeature = prevState.features[0];
+        const updatedCoords = existingCoords.concat([[newLocation[0], newLocation[1]]]);
+        const updatedFeature = {
+          ...existingFeature,
+          geometry: { ...existingFeature.geometry, coordinates: updatedCoords },
+        };
+        return {
+          ...prevState,
+          features: [updatedFeature],
+        };
+      });
+    }
+  }, [trackPointState]);
 
   const isLayerVisible = gnssEnabled ? 'visible' : 'none';
   return (
     <>
-      <ShapeSource id="gnss-source" shape={trackState}>
-        <CircleLayer id="gnss-layer" style={{ ...gnssStyle, visibility: isLayerVisible }} />
+      <ShapeSource id="gnss-source" key="gnss-source" shape={trackLineState}>
+        <LineLayer
+          id="gnss-track-line"
+          key="gnss-track-line"
+          style={{ ...gnssTrackStyle, visibility: isLayerVisible }}
+        />
       </ShapeSource>
-      <ShapeSource id="gnss-track-source" shape={lines}>
-        <LineLayer id="gnss-track" style={{ ...gnssTrackStyle, visibility: isLayerVisible }} />
+      <ShapeSource id="gnss-point-source" key="gnss-point-source" shape={trackPointState}>
+        <CircleLayer
+          id="gnss-point-layer"
+          key="gnss-point-layer"
+          style={{ ...gnssStyle, visibility: isLayerVisible }}
+        />
       </ShapeSource>
     </>
   );

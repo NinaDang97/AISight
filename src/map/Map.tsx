@@ -100,8 +100,7 @@ const Map = () => {
 
   useEffect(() => {
     setMapStyle(prev => {
-      let next = isGnssEnabled ? addGnssMockLayer(prev) : removeGnssMockLayer(prev);
-      next = isShipEnabled ? addShipLayer(next) : removeShipLayer(next);
+      let next = isShipEnabled ? addShipLayer(prev) : removeShipLayer(prev);
       return next;
     });
   }, [isGnssEnabled, isShipEnabled]);
@@ -160,16 +159,19 @@ const Map = () => {
   };
 
   // Handle user interaction with map - disable following mode when user scrolls
-  const handleRegionWillChange = useCallback((feature: GeoJSONFeature<GeoJSON.Point, RegionPayload>) => {
-    // If user manually interacts with the map, disable following mode
-    if (feature.properties?.isUserInteraction) {
-      setIsFollowingUser(false);
-    }
-  }, []);
+  const handleRegionWillChange = useCallback(
+    (feature: GeoJSONFeature<GeoJSON.Point, RegionPayload>) => {
+      // If user manually interacts with the map, disable following mode
+      if (feature.properties?.isUserInteraction) {
+        setIsFollowingUser(false);
+      }
+    },
+    [],
+  );
 
   const handleMapPress = useCallback(
     async (feature: GeoJSONFeature) => {
-      if (!mapRef.current || !isGnssEnabled && !isShipEnabled) {
+      if (!mapRef.current || (!isGnssEnabled && !isShipEnabled)) {
         setSelectedGnss(null);
         setCardVisible(false);
         return;
@@ -192,8 +194,8 @@ const Map = () => {
             undefined,
             ['gnss-mock-points', 'ships', 'passenger-ships'],
           );
-        
-        if(!collection.features || !collection.features.length) {
+
+        if (!collection.features || !collection.features.length) {
           setSelectedGnss(null);
           setCardVisible(false);
         }
@@ -219,7 +221,6 @@ const Map = () => {
           setCardVisible(true);
           setVesselData(tappedFeature);
         }
-        
       } catch (error) {
         console.warn('Unable to resolve GNSS selection', error);
         setSelectedGnss(null);
@@ -360,7 +361,11 @@ const Map = () => {
         onRegionDidChange={updateVesselData}
       >
         <GnssLayer gnssEnabled={isGnssEnabled} />
-        <Camera ref={cameraRef} defaultSettings={cameraInitStop} followUserLocation={isFollowingUser} />
+        <Camera
+          ref={cameraRef}
+          defaultSettings={cameraInitStop}
+          followUserLocation={isFollowingUser}
+        />
         {hasLocationPermission && <UserLocation renderMode="native" androidRenderMode="compass" />}
       </MapView>
 
