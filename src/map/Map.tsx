@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Button,
   View,
@@ -38,7 +38,6 @@ import {
 import {
   addGnssMockLayer,
   addShipLayer,
-  defaultStyle,
   getAppropriateMapStyle,
   removeGnssMockLayer,
   removeShipLayer,
@@ -87,8 +86,6 @@ const emptyVesselCollection: VesselFC = {
 };
 
 const Map = () => {
-  // Initialize map with appropriate style based on API key availability
-  const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(defaultStyle);
   const cameraRef = React.useRef<CameraRef>(null);
   const mapRef = React.useRef<MapViewRef>(null);
   const [isShipEnabled, setIsShipEnabled] = React.useState(false);
@@ -97,8 +94,7 @@ const Map = () => {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isFollowingUser, setIsFollowingUser] = useState(false);
-  const [vesselMetadataState, setVesselMetadataState] =
-    React.useState<VesselMetadataCollection | null>(null);
+
   const { vesselList } = useVesselMqtt();
   const shouldUseLiveFeed = vesselList.length > 0;
 
@@ -113,8 +109,6 @@ const Map = () => {
         .filter(v => typeof v.lat === 'number' && typeof v.lon === 'number')
         .map(v => {
           const numericMmsi = Number(v.mmsi);
-          const metadata =
-            v.metadata ?? vesselMetadataState?.metadataRecords.get(numericMmsi);
           const rawRot = v.raw?.rot;
 
           return {
@@ -134,94 +128,29 @@ const Map = () => {
               raim: Boolean(v.raim),
               heading: typeof v.heading === 'number' ? v.heading : undefined,
               timestamp: v.receivedAt,
-              vesselMetadata: metadata,
               layerId: 'ships',
             },
           };
         }),
     };
-  }, [vesselList, vesselMetadataState]);
+  }, [vesselList]);
 
   const { hasLocationPermission, requestLocation } = usePermissions();
   const { setCardVisible, setVesselData } = useVesselDetails();
 
-  useEffect(() => {
-    setMapStyle(prev => {
-      let next = isGnssEnabled ? addGnssMockLayer(prev) : removeGnssMockLayer(prev);
-      next = isShipEnabled ? addShipLayer(next) : removeShipLayer(next);
-      return next;
-    });
-  }, [isGnssEnabled, isShipEnabled]);
+  const baseMapStyle = useMemo<StyleSpecification>(() => getAppropriateMapStyle(), []);
 
-  useEffect(() => {
-    let mounted = true;
-    setMapStyle(getAppropriateMapStyle());
+  const mapStyle = useMemo<StyleSpecification>(() => {
+    let next: StyleSpecification = baseMapStyle;
+    next = isGnssEnabled ? addGnssMockLayer(next) : removeGnssMockLayer(next);
+    next = isShipEnabled ? addShipLayer(next) : removeShipLayer(next);
 
-    const initMetadata = async () => {
-      try {
-        const metadata = await fetchMetadataForAllVessels();
-        setVesselMetadataState(metadata);
-      } catch (err) {
-        console.warn('Failed to load vessel metadata on mount', err);
-      }
-    };
-    initMetadata();
-
-    const tick = async () => {
-      try {
-        updateVesselData();
-      } catch (err) {
-        console.warn('Periodic ship update failed', err);
-      }
-    };
-
-    tick();
-    const id = setInterval(tick, 60_000);
-
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
-  }, []);
-
-  const updateVesselData = async () => {
-    if (shouldUseLiveFeed) {
-      return;
+    if (isShipEnabled && shouldUseLiveFeed && liveVesselCollection.features.length) {
+      next = updateShipData(next, liveVesselCollection);
     }
 
-    const currentCenter = await mapRef.current?.getCenter();
-    if (!currentCenter) throw new Error('Error getting map center');
-    const visibleBounds = await mapRef.current?.getVisibleBounds();
-    if (!visibleBounds) throw new Error('Error getting map bounds');
-
-    const url = makeAisApiUrl(currentCenter, visibleBounds);
-    const vessels: VesselFC = await fetchVessels(url);
-
-    // Populate the metadata property
-    vessels.features.forEach(
-      feature =>
-        (feature.properties.vesselMetadata = vesselMetadataState?.metadataRecords.get(
-          feature.mmsi,
-        )),
-    );
-
-    logger.info(`Vessels updated`);
-
-    setMapStyle(prev => updateShipData(prev, vessels));
-  };
-
-  useEffect(() => {
-    if (!isShipEnabled) {
-      return;
-    }
-    if (!shouldUseLiveFeed) {
-      return;
-    }
-    if (!liveVesselCollection.features.length) {
-      return;
-    }
-    setMapStyle(prev => updateShipData(prev, liveVesselCollection));
-  }, [isShipEnabled, shouldUseLiveFeed, liveVesselCollection]);
+    return next;
+  }, [baseMapStyle, isGnssEnabled, isShipEnabled, shouldUseLiveFeed, liveVesselCollection]);
 
   // Handle user interaction with map - disable following mode when user scrolls
   const handleRegionWillChange = useCallback((feature: GeoJSONFeature<GeoJSON.Point, RegionPayload>) => {
@@ -421,7 +350,6 @@ const Map = () => {
         attributionEnabled={false}
         compassEnabled={false}
         onRegionWillChange={handleRegionWillChange}
-        onRegionDidChange={updateVesselData}
       >
         <Camera ref={cameraRef} defaultSettings={cameraInitStop} followUserLocation={isFollowingUser} />
         {hasLocationPermission && <UserLocation renderMode="native" androidRenderMode="compass" />}
