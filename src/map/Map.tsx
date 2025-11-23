@@ -51,6 +51,7 @@ import { RESULTS } from 'react-native-permissions';
 import { LocationService } from '../services/location';
 import { logger } from '../utils/logger';
 import { useVesselDetails } from '../components/contexts/VesselDetailsContext';
+import GnssLayer from './GnssLayer';
 
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
@@ -358,6 +359,7 @@ const Map = () => {
         onRegionWillChange={handleRegionWillChange}
         onRegionDidChange={updateVesselData}
       >
+        <GnssLayer gnssEnabled={isGnssEnabled} />
         <Camera ref={cameraRef} defaultSettings={cameraInitStop} followUserLocation={isFollowingUser} />
         {hasLocationPermission && <UserLocation renderMode="native" androidRenderMode="compass" />}
       </MapView>
