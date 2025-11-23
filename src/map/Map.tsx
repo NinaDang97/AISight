@@ -28,13 +28,7 @@ import type {
   Position as GeoJSONPosition,
 } from 'geojson';
 
-import {
-  fetchMetadataForAllVessels,
-  fetchVessels,
-  makeAisApiUrl,
-  VesselFC,
-  VesselMetadataCollection,
-} from './map-utils';
+import { VesselFC } from './map-utils';
 import {
   addGnssMockLayer,
   addShipLayer,
@@ -183,7 +177,7 @@ const Map = () => {
           await mapRef.current.queryRenderedFeaturesAtPoint(
             [screenPointX, screenPointY],
             undefined,
-            ['gnss-mock-points', 'ships', 'passenger-ships'],
+            ['gnss-mock-points', 'normal-active-ships', 'normal-stationary-ships', 'anomaly-active-ships', 'anomaly-stationary-ships'],
           );
         
         if(!collection.features || !collection.features.length) {
@@ -223,6 +217,7 @@ const Map = () => {
   );
 
   const resetCamera = () => {
+    setIsFollowingUser(false);
     cameraRef.current?.setCamera(cameraInitStop);
   };
 

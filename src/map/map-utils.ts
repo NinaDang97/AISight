@@ -54,7 +54,7 @@ interface VesselFeatureProperties extends FinTrafficVesselFeatureProperties {
   vesselMetadata: SupportedVesselMetadata | undefined;
 }
 
-interface VesselFeature extends GeoJSON.Feature<GeoJSON.Point, VesselFeatureProperties> {
+interface VesselFeature extends GeoJSON.Feature<GeoJSON.Point, FinTrafficVesselFeatureProperties> {
   mmsi: number;
 }
 
