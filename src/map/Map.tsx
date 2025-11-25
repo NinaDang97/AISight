@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   View,
@@ -69,7 +69,7 @@ type RegionPayload = {
 
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
-  zoomLevel: 6,
+  zoomLevel: 8,
 };
 
 const defaultCameraCenter = cameraInitStop.centerCoordinate as GeoJSONPosition;
@@ -82,13 +82,20 @@ const emptyVesselCollection: VesselFC = {
 const Map = () => {
   const cameraRef = React.useRef<CameraRef>(null);
   const mapRef = React.useRef<MapViewRef>(null);
+  const vesselUpdateThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastVesselUpdateRef = useRef(0);
   const [isShipEnabled, setIsShipEnabled] = React.useState(false);
   const [isGnssEnabled, setIsGnssEnabled] = useState(false);
   const [selectedGnss, setSelectedGnss] = React.useState<SelectedGnss | null>(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isFollowingUser, setIsFollowingUser] = useState(false);
+  const [viewBounds, setViewBounds] = useState<{ northeast: GeoJSONPosition; southwest: GeoJSONPosition } | null>(null);
+  const [viewCenter, setViewCenter] = useState<GeoJSONPosition | null>(null);
+  const [mapStyle, setMapStyle] = useState<StyleSpecification>(() => getAppropriateMapStyle());
 
+  const { hasLocationPermission, requestLocation } = usePermissions();
+  const { setCardVisible, setVesselData } = useVesselDetails();
   const { vesselList } = useVesselMqtt();
   const shouldUseLiveFeed = vesselList.length > 0;
 
@@ -97,9 +104,37 @@ const Map = () => {
       return emptyVesselCollection;
     }
 
+    const center = viewCenter ?? defaultCameraCenter;
+    const bounds = viewBounds;
+    const maxVisible = 500;
+
+    const bounded = vesselList.filter(v => {
+      if (typeof v.lat !== 'number' || typeof v.lon !== 'number') {
+        return false;
+      }
+      if (!bounds) {
+        return true;
+      }
+      // Vessel latitude between top and bottom of the screen/box
+      const inLat = v.lat <= bounds.northeast[1] && v.lat >= bounds.southwest[1];
+      // Vessel latitude between left and right of the screen/box
+      const inLon = v.lon <= bounds.northeast[0] && v.lon >= bounds.southwest[0];
+      return inLat && inLon;
+    });
+
+    // Euclidean distance: sort vessels by proximity to the center (closer first)
+    const sorted = bounded
+      .map(v => ({
+        v,
+        d: Math.hypot(v.lon - center[0], v.lat - center[1]),
+      }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, maxVisible)
+      .map(({ v }) => v);
+
     return {
       type: 'FeatureCollection',
-      features: vesselList
+      features: sorted
         .filter(v => typeof v.lat === 'number' && typeof v.lon === 'number')
         .map(v => {
           const numericMmsi = Number(v.mmsi);
@@ -127,30 +162,84 @@ const Map = () => {
           };
         }),
     };
-  }, [vesselList]);
+  }, [vesselList, viewBounds, viewCenter]);
 
-  const { hasLocationPermission, requestLocation } = usePermissions();
-  const { setCardVisible, setVesselData } = useVesselDetails();
+  useEffect(() => {
+    setMapStyle(prev => {
+      let next = isGnssEnabled ? addGnssMockLayer(prev) : removeGnssMockLayer(prev);
+      next = isShipEnabled ? addShipLayer(next) : removeShipLayer(next);
+      return next;
+    });
+  }, [isGnssEnabled, isShipEnabled]);
 
-  const baseMapStyle = useMemo<StyleSpecification>(() => getAppropriateMapStyle(), []);
+  const scheduleVesselStyleUpdate = useCallback(
+    (collection: VesselFC) => {
+      if (!collection.features.length) {
+        return;
+      }
+      const now = Date.now();
+      const elapsed = now - lastVesselUpdateRef.current;
+      const delay = Math.max(0, 1000 - elapsed); // throttle ~1000ms
 
-  const mapStyle = useMemo<StyleSpecification>(() => {
-    let next: StyleSpecification = baseMapStyle;
-    next = isGnssEnabled ? addGnssMockLayer(next) : removeGnssMockLayer(next);
-    next = isShipEnabled ? addShipLayer(next) : removeShipLayer(next);
+      if (vesselUpdateThrottleRef.current) {
+        clearTimeout(vesselUpdateThrottleRef.current);
+      }
 
-    if (isShipEnabled && shouldUseLiveFeed && liveVesselCollection.features.length) {
-      next = updateShipData(next, liveVesselCollection);
+      vesselUpdateThrottleRef.current = setTimeout(() => {
+        lastVesselUpdateRef.current = Date.now();
+        setMapStyle(prev => updateShipData(prev, collection));
+      }, delay);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!isShipEnabled || !shouldUseLiveFeed) {
+      return;
     }
+    scheduleVesselStyleUpdate(liveVesselCollection);
+    return () => {
+      if (vesselUpdateThrottleRef.current) {
+        clearTimeout(vesselUpdateThrottleRef.current);
+        vesselUpdateThrottleRef.current = null;
+      }
+    };
+  }, [isShipEnabled, shouldUseLiveFeed, liveVesselCollection, scheduleVesselStyleUpdate]);
 
-    return next;
-  }, [baseMapStyle, isGnssEnabled, isShipEnabled, shouldUseLiveFeed, liveVesselCollection]);
+  useEffect(() => {
+    const initBounds = async () => {
+      try {
+        const bounds = await mapRef.current?.getVisibleBounds();
+        const center = await mapRef.current?.getCenter();
+        if (bounds) {
+          setViewBounds({ northeast: bounds[0], southwest: bounds[1] });
+        }
+        if (center) {
+          setViewCenter(center);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    initBounds();
+  }, []);
 
   // Handle user interaction with map - disable following mode when user scrolls
   const handleRegionWillChange = useCallback((feature: GeoJSONFeature<GeoJSON.Point, RegionPayload>) => {
     // If user manually interacts with the map, disable following mode
     if (feature.properties?.isUserInteraction) {
       setIsFollowingUser(false);
+    }
+  }, []);
+
+  const handleRegionDidChange = useCallback((feature: GeoJSONFeature<GeoJSON.Point, RegionPayload>) => {
+    const bounds = feature.properties?.visibleBounds;
+    if (bounds?.length === 2) {
+      setViewBounds({ northeast: bounds[0], southwest: bounds[1] });
+    }
+    const center = feature.geometry?.coordinates as GeoJSONPosition | undefined;
+    if (center?.length === 2) {
+      setViewCenter(center);
     }
   }, []);
 
@@ -345,6 +434,7 @@ const Map = () => {
         attributionEnabled={false}
         compassEnabled={false}
         onRegionWillChange={handleRegionWillChange}
+        onRegionDidChange={handleRegionDidChange}
       >
         <Camera ref={cameraRef} defaultSettings={cameraInitStop} followUserLocation={isFollowingUser} />
         {hasLocationPermission && <UserLocation renderMode="native" androidRenderMode="compass" />}

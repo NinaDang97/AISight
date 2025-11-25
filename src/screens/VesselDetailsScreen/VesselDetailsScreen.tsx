@@ -87,6 +87,10 @@ export const VesselDetailsScreen = () => {
 
           {/* Basic vessel information */}
           <View style={styles.detailRow}>
+            <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>MMSI:</Text>
+            <Text style={typography.body}>{mmsi}</Text>
+          </View>
+          <View style={styles.detailRow}>
             <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>Latitude - Longitude:</Text>
             <Text style={typography.body}>{lat} - {lon}</Text>
           </View>
