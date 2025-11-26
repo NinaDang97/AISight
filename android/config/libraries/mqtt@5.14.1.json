@@ -1,0 +1,1 @@
+{"artifactVersion":"5.14.1","description":"A library for the MQTT protocol","developers":[{"name":"","organisationUrl":""}],"licenses":["MIT_295f1d5da8d1443efa529f1c2bf2de833669be3ec8593a1e516cf9ba454405c708256ac14747f875e76974903cfae63a1c3c3db8dea79f207887bad6145f08fa"],"name":"mqtt","tag":"","uniqueId":"mqtt@5.14.1","website":"https://github.com/mqttjs/MQTT.js"}

@@ -5,6 +5,7 @@ import { SafeAreaWrapper } from '../../components/common/SafeAreaWrapper';
 import { Button } from '../../components/common/Button';
 import { useAppContext } from '../../contexts';
 import { colors, spacing, typography } from '../../styles';
+import { ReactNativeLegal } from 'react-native-legal';
 
 const MapCopyrights = () => {
   return (
@@ -206,6 +207,12 @@ export const SettingsScreen = () => {
           <Pressable onPress={showMapCopyrights}>
             <View style={styles.item}>
               <Text style={typography.body}>Map copyrights</Text>
+              <Text style={typography.body}>{'>'}</Text>
+            </View>
+          </Pressable>
+          <Pressable onPress={() => ReactNativeLegal.launchLicenseListScreen('3rd Party Licenses')}>
+            <View style={styles.item}>
+              <Text style={typography.body}>3rd party licenses</Text>
               <Text style={typography.body}>{'>'}</Text>
             </View>
           </Pressable>
