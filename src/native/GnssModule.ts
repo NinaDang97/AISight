@@ -34,6 +34,7 @@ export type GnssStatus = {
 export type GnssMeasurement = {
   svid: number;              // satellite vehicle ID
   cn0DbHz?: number;          // signal strength for this satellite
+  agcLevelDb?: number;       // Automatic Gain Control level in dB (Android 12+)
   constellation?: string;    // GPS, GLONASS, GALILEO, etc.
   carrierFrequencyHz?: number; // radio frequency (Hz)
   timeNanos?: number;        // GNSS time (nanoseconds)
@@ -74,6 +75,10 @@ type GnssModuleType = {
   isGpsEnabled(): Promise<boolean>;
   listLogFiles(): Promise<LogFileInfo[]>;
   deleteLogFile(filePath: string): Promise<boolean>;
+  // Polling methods for RN 0.76+ bridgeless mode workaround
+  getLatestLocation(): Promise<GnssLocation | null>;
+  getLatestStatus(): Promise<GnssStatus | null>;
+  getLatestMeasurements(): Promise<GnssMeasurement[] | null>;
 };
 
 /**
@@ -91,3 +96,51 @@ export const GnssModule = NativeModules.GnssModule as GnssModuleType;
 export const GnssExportModule = NativeModules.GnssExportModule as GnssExportModuleType;
 
 export default GnssModule;
+
+// ============================================================================
+// Anomaly Detection Types
+// ============================================================================
+
+/**
+ * Epoch data - aggregated GNSS measurements over a time window (typically 1 second)
+ */
+export type GnssEpoch = {
+  timestamp: number;           // milliseconds since epoch
+  avgCn0DbHz: number;          // average C/N0 across all satellites
+  avgAgcLevelDb?: number;      // average AGC level (if available on Android 12+)
+  satelliteCount: number;      // number of satellites in this epoch
+  location: GnssLocation | null; // location at this epoch
+};
+
+/**
+ * Anomaly event with path tracking
+ */
+export type GnssAnomalyEvent = {
+  id: string;
+  type: 'JAMMING' | 'SPOOFING' | 'SIGNAL_DEGRADATION';
+  severity: 'High' | 'Medium' | 'Low';
+  status: 'Active' | 'Completed';
+
+  // Start of anomaly
+  startTime: number;           // timestamp in ms
+  startLocation: GnssLocation | null;
+
+  // End of anomaly (undefined if still active)
+  endTime?: number;
+  endLocation?: GnssLocation | null;
+
+  // Path during anomaly (array of locations)
+  path: GnssLocation[];
+
+  // Detection metrics
+  metrics: {
+    cn0Drop: number;           // % decrease from baseline
+    agcDrop?: number;          // % decrease from baseline (if available)
+    avgCn0: number;
+    avgAgc?: number;
+    baselineCn0: number;
+    baselineAgc?: number;
+  };
+
+  description: string;
+};

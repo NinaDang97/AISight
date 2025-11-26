@@ -1,3 +1,5 @@
+import type { VesselMetadataRecord } from '../components/contexts/VesselMqttContext';
+
 const FINTRAFFIC_AIS_BASE_URL: string = 'https://meri.digitraffic.fi/api/ais/v1';
 
 // interface definitions for AIS data from FinTraffic API https://meri.digitraffic.fi/swagger/#/AIS%20V1/vesselMetadataByMssi
@@ -11,7 +13,7 @@ interface FinTrafficVesselFeatureProperties {
   raim: boolean;
   heading?: number;
   timestamp: number;
-  timestampExternal: number;
+  timestampExternal?: number;
 }
 
 interface FinTrafficVesselFeature
@@ -46,11 +48,13 @@ export interface FinTrafficVesselMetadata {
   referencePointD: number;
 }
 
+type SupportedVesselMetadata = FinTrafficVesselMetadata | VesselMetadataRecord;
+
 interface VesselFeatureProperties extends FinTrafficVesselFeatureProperties {
-  vesselMetadata: FinTrafficVesselMetadata | undefined;
+  vesselMetadata: SupportedVesselMetadata | undefined;
 }
 
-interface VesselFeature extends GeoJSON.Feature<GeoJSON.Point, VesselFeatureProperties> {
+interface VesselFeature extends GeoJSON.Feature<GeoJSON.Point, FinTrafficVesselFeatureProperties> {
   mmsi: number;
 }
 

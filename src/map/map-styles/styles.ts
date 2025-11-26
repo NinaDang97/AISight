@@ -13,6 +13,7 @@ import * as defaultMapStyle from '../map-styles/maplibre-default-style.json';
 import * as basicMapStyle from '../map-styles/maptiler-basic-gl-style.json';
 import { gnssMockFixes } from '../../logs/native-module/gnss-mock';
 import { VesselFC } from '../map-utils';
+import { colors } from '../../styles';
 
 const MAPTILER_API_KEY = getMapTilerApiKey();
 
@@ -91,9 +92,10 @@ export const addShipLayer = (prevStyle: StyleSpecification): StyleSpecification 
     },
     layers: [
       ...(baseStyle.layers ?? []),
-      shipLayer,
-      passengerShipLayer,
-      plainPointLayer,
+      normalActiveShipLayer,
+      normalStationaryShipLayer,
+      anomalyActiveShipLayer,
+      anomalyStationaryShipLayer,
       shipTextLayer,
     ],
   };
@@ -103,9 +105,10 @@ export const removeShipLayer = (prevStyle: StyleSpecification): StyleSpecificati
   const sources = baseStyleSourcesWithoutShips(prevStyle.sources);
   const layers = (prevStyle.layers ?? []).filter(
     layer =>
-      layer.id !== shipLayer.id &&
-      layer.id !== passengerShipLayer.id &&
-      layer.id !== plainPointLayer.id &&
+      layer.id !== normalActiveShipLayer.id &&
+      layer.id !== normalStationaryShipLayer.id &&
+      layer.id !== anomalyActiveShipLayer.id &&
+      layer.id !== anomalyStationaryShipLayer.id &&
       layer.id !== shipTextLayer.id,
   );
 
@@ -171,7 +174,16 @@ export const updateShipData = (
       ...prevStyle.sources,
       'fintraffic-ships': {
         type: 'geojson',
-        data: vessels,
+        data: {
+          ...vessels,
+          features: vessels.features.map(f => ({
+            ...f,
+            properties: {
+              ...f.properties,
+              layerId: 'ships',
+            },
+          })),
+        },
       },
     },
   };
@@ -196,25 +208,67 @@ const plainPointSource: GeoJSONSourceSpecification = {
 
 // ===== Layer Definitions =====
 
-const shipLayer: CircleLayerSpecification = {
-  id: 'ships',
+const normalActiveShipLayer: CircleLayerSpecification = {
+  id: 'normal-active-ships',
   type: 'circle',
   source: 'fintraffic-ships',
-  filter: ['!=', ['get', 'shipType', ['get', 'vesselMetadata']], 60],
+  filter: [
+    'all',
+    ['==', ['get', 'posAcc'], true],
+    ['>', ['get', 'sog'], 0],
+  ],
   paint: {
-    'circle-color': '#0aa',
+    'circle-color': colors.online,
     'circle-stroke-width': 2,
   },
 };
 
-const passengerShipLayer: CircleLayerSpecification = {
-  id: 'passenger-ships',
+const normalStationaryShipLayer: CircleLayerSpecification = {
+  id: 'normal-stationary-ships',
   type: 'circle',
   source: 'fintraffic-ships',
-  filter: ['==', ['get', 'shipType', ['get', 'vesselMetadata']], 60],
+  filter: [
+    'all',
+    ['==', ['get', 'posAcc'], true],
+    ['==', ['get', 'sog'], 0],
+  ],
   paint: {
-    'circle-color': '#f00',
+    'circle-color': colors.offline,
     'circle-stroke-width': 2,
+  },
+};
+
+const anomalyActiveShipLayer: CircleLayerSpecification = {
+  id: 'anomaly-active-ships',
+  type: 'circle',
+  source: 'fintraffic-ships',
+  filter: [
+    'all',
+    ['==', ['get', 'posAcc'], false],
+    ['>', ['get', 'sog'], 0],
+  ],
+  paint: {
+    // Light fill to highlight anomalies while keeping the original accent color on the border
+    'circle-color': colors.online,
+    'circle-stroke-color': colors.error,
+    'circle-stroke-width': 3,
+  },
+};
+
+const anomalyStationaryShipLayer: CircleLayerSpecification = {
+  id: 'anomaly-stationary-ships',
+  type: 'circle',
+  source: 'fintraffic-ships',
+  filter: [
+    'all',
+    ['==', ['get', 'posAcc'], false],
+    ['==', ['get', 'sog'], 0],
+  ],
+  paint: {
+    // Light fill to highlight anomalies while keeping the original accent color on the border
+    'circle-color': colors.offline,
+    'circle-stroke-color': colors.error,
+    'circle-stroke-width': 3,
   },
 };
 
@@ -242,20 +296,18 @@ const herwoodLayer: LineLayerSpecification = {
   },
 };
 
-const plainPointLayer: CircleLayerSpecification = {
-  id: 'plain-point',
-  type: 'circle',
-  source: 'plain-point',
-  paint: {
-    'circle-color': '#0a0',
-    'circle-stroke-width': 2,
-    'circle-stroke-color': '#000',
-  },
-};
-
 const gnssMockSource: GeoJSONSourceSpecification = {
   type: 'geojson',
-  data: gnssMockFixes,
+  data: {
+    ...gnssMockFixes,
+    features: gnssMockFixes.features.map(f => ({
+      ...f,
+      properties: {
+        ...f.properties,
+        layerId: 'gnss-mock-points', // Add a unique layerId
+      },
+    })),
+  },
 };
 
 const gnssTrackLayer: LineLayerSpecification = {
