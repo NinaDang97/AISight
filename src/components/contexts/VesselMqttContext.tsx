@@ -2,22 +2,40 @@ import React from 'react';
 import { connect, MqttClient } from 'mqtt';
 
 const MQTT_URI = 'wss://meri.digitraffic.fi:443/mqtt';
-const MQTT_TOPIC = 'vessels-v2/+/location';
-// const MQTT_TOPIC = 'vessels-v2/230040000/location'
+const MQTT_LOCATION_TOPIC = 'vessels-v2/+/location';
+const MQTT_METADATA_TOPIC = 'vessels-v2/+/metadata';
+
+export type VesselMetadataRecord = {
+  timestamp: number;
+  destination: string | null;
+  name: string | null;
+  draught: number;
+  eta: number;
+  posType: number;
+  refA: number;
+  refB: number;
+  refC: number;
+  refD: number;
+  callSign: string;
+  imo: number;
+  type: number;
+  raw: Record<string, unknown>;
+};
 
 type VesselStreamRecord = {
   mmsi: string;
   topic: string;
-  lat: number;
+  timestamp: string;
+  sog: number;
+  cog: number;
+  navStat: number;
+  rot: number;
+  posAcc: boolean;
+  raim: boolean;
+  heading: number;
   lon: number;
-  heading?: number | null;
-  sog?: number | null;
-  cog?: number | null;
-  navStat?: number | null;
-  posAcc?: boolean;
-  raim?: boolean;
+  lat: number;
   receivedAt: number;
-  reportedAt?: number;
   raw: Record<string, unknown>;
 };
 
@@ -28,6 +46,8 @@ type VesselMqttContextType = {
   error?: string | null;
   vessels: Record<string, VesselStreamRecord>;
   vesselList: VesselStreamRecord[];
+  metadata: Record<string, VesselMetadataRecord>;
+  metadataList: VesselMetadataRecord[];
 };
 
 const VesselMqttContext = React.createContext<VesselMqttContextType | undefined>(undefined);
@@ -44,6 +64,7 @@ export const VesselMqttProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [status, setStatus] = React.useState<ConnectionStatus>('idle');
   const [error, setError] = React.useState<string | null>(null);
   const [vessels, setVessels] = React.useState<Record<string, VesselStreamRecord>>({});
+  const [metadataRecords, setMetadataRecords] = React.useState<Record<string, VesselMetadataRecord>>({});
   const clientRef = React.useRef<MqttClient | null>(null);
 
   React.useEffect(() => {
@@ -60,14 +81,14 @@ export const VesselMqttProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     clientRef.current = client;
 
-    const subscribeToTopic = () => {
-      client.subscribe(MQTT_TOPIC, { qos: 0 }, err => {
+    const subscribeToTopics = () => {
+      client.subscribe([MQTT_LOCATION_TOPIC, MQTT_METADATA_TOPIC], { qos: 0 }, err => {
         if (err) {
           console.log('[mqtt] subscribe error', err?.message ?? err);
           setError(err?.message ?? 'Subscription failed');
           return;
         }
-        console.log('[mqtt] subscribed to vessels topic');
+        console.log('[mqtt] subscribed to vessel topics');
       });
     };
 
@@ -78,7 +99,7 @@ export const VesselMqttProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       console.log('[mqtt] connected');
       setStatus('connected');
       setError(null);
-      subscribeToTopic();
+      subscribeToTopics();
     });
 
     client.on('reconnect', () => {
@@ -118,24 +139,67 @@ export const VesselMqttProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       try {
         const parsed = JSON.parse(payload.toString());
-        setVessels(prev => ({
-          ...prev,
-          [mmsi]: {
-            mmsi,
-            topic,
-            lat: parsed.lat,
-            lon: parsed.lon,
-            heading: parsed.heading ?? null,
-            sog: parsed.sog ?? null,
-            cog: parsed.cog ?? null,
-            navStat: parsed.navStat ?? null,
-            posAcc: parsed.posAcc ?? null,
-            raim: parsed.raim ?? null,
-            reportedAt: typeof parsed.time === 'number' ? parsed.time : undefined,
-            receivedAt: Date.now(),
+        const isLocationTopic = topic.includes('/location');
+        const isMetadataTopic = topic.includes('/metadata');
+
+        if (!isLocationTopic && !isMetadataTopic) {
+          return;
+        }
+
+        if (isLocationTopic) {
+          setVessels(prev => {
+            const existing = prev[mmsi];
+            const updated: VesselStreamRecord = {
+              ...(existing ?? {
+                mmsi,
+                topic,
+                receivedAt: Date.now(),
+                raw: {},
+              }),
+              mmsi,
+              topic,
+              lat: parsed.lat,
+              lon: parsed.lon,
+              heading: parsed.heading,
+              sog: parsed.sog,
+              cog: parsed.cog,
+              navStat: parsed.navStat,
+              rot: parsed.rot,
+              posAcc: parsed.posAcc,
+              raim: parsed.raim,
+              receivedAt: Date.now(),
+              raw: parsed,
+            };
+
+            return {
+              ...prev,
+              [mmsi]: updated,
+            };
+          });
+        }
+        if (isMetadataTopic) {
+          const metadataRecord: VesselMetadataRecord = {
+            timestamp: parsed.timestamp,
+            destination: parsed.destination,
+            name: parsed.name,
+            draught: parsed.draught,
+            eta: parsed.eta,
+            posType: parsed.posType,
+            refA: parsed.refA,
+            refB: parsed.refB,
+            refC: parsed.refC,
+            refD: parsed.refD,
+            callSign: parsed.callSign,
+            imo: parsed.imo,
+            type: parsed.type,
             raw: parsed,
-          },
-        }));
+          };
+
+          setMetadataRecords(prev => ({
+            ...prev,
+            [mmsi]: metadataRecord,
+          }));
+        }
       } catch (err) {
         console.log('[mqtt] failed to parse message', err);
       }
@@ -150,6 +214,7 @@ export const VesselMqttProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   const vesselList = React.useMemo(() => Object.values(vessels), [vessels]);
+  const metadataList = React.useMemo(() => Object.values(metadataRecords), [metadataRecords]);
 
   return (
     <VesselMqttContext.Provider
@@ -158,6 +223,8 @@ export const VesselMqttProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         error,
         vessels,
         vesselList,
+        metadata: metadataRecords,
+        metadataList,
       }}
     >
       {children}
