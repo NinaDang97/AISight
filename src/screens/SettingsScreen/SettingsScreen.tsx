@@ -5,22 +5,29 @@ import { SafeAreaWrapper } from '../../components/common/SafeAreaWrapper';
 import { Button } from '../../components/common/Button';
 import { useAppContext } from '../../contexts';
 import { colors, spacing, typography } from '../../styles';
-import { logger } from '../../utils/logger';
+import { ReactNativeLegal } from 'react-native-legal';
 
-const Licenses = () => {
+const MapCopyrights = () => {
   return (
     <ScrollView style={styles.container}>
       <View style={[styles.item, { marginTop: spacing.xlarge }]}>
-        <Text style={typography.body}>Insert licences here</Text>
+        <Text style={typography.body}>
+          Map copyright notices{'\n\n'}
+          Map data hosting{'\n'}
+          Copyright (c) MapTiler https://www.maptiler.com/copyright/{'\n\n'}
+          Map data{'\n'}
+          Copyright (c) OpenStreetMap contributors https://www.openstreetmap.org/copyright{'\n'}
+          Licensed under Open Database License (ODbL) https://opendatacommons.org/licenses/odbl/
+        </Text>
       </View>
     </ScrollView>
   );
 };
 
 export const SettingsScreen = () => {
-  const [licencesVisible, setLicencesVisible] = React.useState(false);
-  
-  const { 
+  const [mapCopyrightsVisible, setMapCopyrightsVisible] = React.useState(false);
+
+  const {
     permissions,
     hasNotificationPermission,
     hasLocationPermission,
@@ -35,15 +42,15 @@ export const SettingsScreen = () => {
   useFocusEffect(
     useCallback(() => {
       checkPermissions();
-    }, [checkPermissions])
+    }, [checkPermissions]),
   );
 
-  const showLicences = () => {
-    setLicencesVisible(true);
+  const showMapCopyrights = () => {
+    setMapCopyrightsVisible(true);
   };
 
   const handleBack = () => {
-    setLicencesVisible(false);
+    setMapCopyrightsVisible(false);
   };
 
   const handleNotificationToggle = async (value: boolean) => {
@@ -51,24 +58,20 @@ export const SettingsScreen = () => {
       if (value) {
         // User wants to enable notifications - guide to system settings
         const title = isNotificationBlocked ? 'Permission Blocked' : 'Enable Notifications';
-        const message = isNotificationBlocked 
+        const message = isNotificationBlocked
           ? 'Notification permission is blocked. Please enable it in your device settings.'
           : 'Please enable notifications in your device settings.';
-        
-        Alert.alert(
-          title,
-          message,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Open Settings', 
-              onPress: async () => {
-                await openSystemSettings();
-                setTimeout(() => checkPermissions(), 500);
-              }
+
+        Alert.alert(title, message, [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Open Settings',
+            onPress: async () => {
+              await openSystemSettings();
+              setTimeout(() => checkPermissions(), 500);
             },
-          ]
-        );
+          },
+        ]);
       } else {
         // User wants to disable notifications - guide to system settings
         Alert.alert(
@@ -76,23 +79,21 @@ export const SettingsScreen = () => {
           'To disable notifications, please go to your device settings.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Open Settings', 
+            {
+              text: 'Open Settings',
               onPress: async () => {
                 await openSystemSettings();
                 setTimeout(() => checkPermissions(), 500);
-              }
+              },
             },
-          ]
+          ],
         );
       }
     } catch (err) {
       logger.error('Error in handleNotificationToggle:', err);
-      Alert.alert(
-        'Error',
-        'Failed to update notification permission. Please try again.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Error', 'Failed to update notification permission. Please try again.', [
+        { text: 'OK' },
+      ]);
     }
   };
 
@@ -104,52 +105,46 @@ export const SettingsScreen = () => {
         const message = isLocationBlocked
           ? 'Location permission is blocked. Please enable it in your device settings.'
           : 'Please enable location services in your device settings.';
-        
-        Alert.alert(
-          title,
-          message,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Open Settings', 
-              onPress: async () => {
-                await openSystemSettings();
-                setTimeout(() => checkPermissions(), 500);
-              }
+
+        Alert.alert(title, message, [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Open Settings',
+            onPress: async () => {
+              await openSystemSettings();
+              setTimeout(() => checkPermissions(), 500);
             },
-          ]
-        );
+          },
+        ]);
       } else {
         Alert.alert(
           'Disable Location',
           'To disable location services, please go to your device settings.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Open Settings', 
+            {
+              text: 'Open Settings',
               onPress: async () => {
                 await openSystemSettings();
                 setTimeout(() => checkPermissions(), 500);
-              }
+              },
             },
-          ]
+          ],
         );
       }
     } catch (err) {
       logger.error('Error in handleLocationToggle:', err);
-      Alert.alert(
-        'Error',
-        'Failed to update location permission. Please try again.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Error', 'Failed to update location permission. Please try again.', [
+        { text: 'OK' },
+      ]);
     }
   };
 
   return (
     <SafeAreaWrapper backgroundColor={colors.background} barStyle="dark-content">
-      {licencesVisible && (
+      {mapCopyrightsVisible && (
         <>
-          <Licenses />
+          <MapCopyrights />
           <Button
             title="< Back"
             variant="outline"
@@ -164,19 +159,19 @@ export const SettingsScreen = () => {
         </>
       )}
 
-      {!licencesVisible && (
+      {!mapCopyrightsVisible && (
         <ScrollView style={styles.container}>
           <Text style={[typography.heading2, styles.header]}>Settings</Text>
           <Text style={[typography.heading5, styles.sectionTitle]}>Permissions</Text>
           <View style={styles.item}>
             <View style={styles.itemContent}>
               <Text style={typography.body}>Push Notifications</Text>
-              <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 4 }]}>  
-                {isNotificationBlocked 
-                  ? 'Blocked - Open Settings' 
-                  : hasNotificationPermission 
-                  ? 'Enabled' 
-                  : 'Disabled'}
+              <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 4 }]}>
+                {isNotificationBlocked
+                  ? 'Blocked - Open Settings'
+                  : hasNotificationPermission
+                    ? 'Enabled'
+                    : 'Disabled'}
               </Text>
             </View>
             <Switch
@@ -190,11 +185,11 @@ export const SettingsScreen = () => {
             <View style={styles.itemContent}>
               <Text style={typography.body}>Location Services</Text>
               <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 4 }]}>
-                {isLocationBlocked 
-                  ? 'Blocked - Open Settings' 
-                  : hasLocationPermission 
-                  ? 'Enabled' 
-                  : 'Disabled'}
+                {isLocationBlocked
+                  ? 'Blocked - Open Settings'
+                  : hasLocationPermission
+                    ? 'Enabled'
+                    : 'Disabled'}
               </Text>
             </View>
             <Switch
@@ -209,9 +204,15 @@ export const SettingsScreen = () => {
             <Text style={typography.body}>Version</Text>
             <Text style={typography.body}>1.0.0</Text>
           </View>
-          <Pressable onPress={showLicences}>
+          <Pressable onPress={showMapCopyrights}>
             <View style={styles.item}>
-              <Text style={typography.body}>Licences</Text>
+              <Text style={typography.body}>Map copyrights</Text>
+              <Text style={typography.body}>{'>'}</Text>
+            </View>
+          </Pressable>
+          <Pressable onPress={() => ReactNativeLegal.launchLicenseListScreen('3rd Party Licenses')}>
+            <View style={styles.item}>
+              <Text style={typography.body}>3rd party licenses</Text>
               <Text style={typography.body}>{'>'}</Text>
             </View>
           </Pressable>
@@ -219,11 +220,7 @@ export const SettingsScreen = () => {
             title="Clear Cache"
             variant="outline"
             onPress={() => {
-              Alert.alert(
-                'Clear Cache',
-                'This feature will be available soon.',
-                [{ text: 'OK' }]
-              );
+              Alert.alert('Clear Cache', 'This feature will be available soon.', [{ text: 'OK' }]);
             }}
             style={{ borderColor: colors.error, marginTop: spacing.large }}
             textStyle={{ color: colors.error }}
