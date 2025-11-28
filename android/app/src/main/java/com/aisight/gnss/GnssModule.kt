@@ -16,7 +16,10 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
-import com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter
+import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.facebook.react.bridge.WritableNativeMap
+import com.facebook.react.bridge.WritableNativeArray
+import com.facebook.react.bridge.ReactContext
 import java.io.BufferedWriter
 import java.io.File
 import java.io.FileWriter
@@ -40,8 +43,29 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
     LifecycleEventListener {
 
     companion object {
+        // ========================================================================
+        // Configuration: Update intervals and thresholds
+        // ========================================================================
+
+        /**
+         * Minimum time interval between location updates in milliseconds
+         * Lower values = more frequent updates but higher battery usage
+         */
+        private const val LOCATION_UPDATE_INTERVAL_MS = 1000L
+
+        /**
+         * Minimum distance change for location updates in meters
+         * Default: 0f (get all updates regardless of distance)
+         * Higher values = updates only when device moves significantly
+         */
+        private const val LOCATION_UPDATE_MIN_DISTANCE_M = 0f
+
+        // Note: GNSS Status and Measurements callbacks update automatically
+        // at hardware sampling rate (typically 1 Hz) and cannot be configured
+
+        // ========================================================================
         // Global logging state - shared across all instances
-        // This allows logging to be toggled from anywhere in the app
+        // ========================================================================
         @Volatile var isLogging = false
         @Volatile var logWriter: BufferedWriter? = null
         @Volatile var logFile: File? = null
@@ -62,8 +86,20 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
         reactCtx.addLifecycleEventListener(this)
     }
 
+    /**
+     * Emit event to React Native using DeviceEventEmitter
+     */
     private fun emit(event: String, payload: Any) {
-        reactCtx.getJSModule(RCTDeviceEventEmitter::class.java).emit(event, payload)
+        if (!reactCtx.hasActiveReactInstance()) {
+            return
+        }
+
+        try {
+            val emitter = reactCtx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            emitter?.emit(event, payload)
+        } catch (e: Exception) {
+            Log.e("GnssModule", "Error emitting event $event: ${e.message}", e)
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -77,13 +113,10 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
         locationManager = reactCtx.getSystemService(LocationManager::class.java)
 
         // Only use GPS provider - no network fallback
-        // If GPS is disabled, we won't get location updates until it's enabled
         locationListener = object : LocationListener {
             override fun onLocationChanged(loc: Location) {
-                // Emit raw location data
                 emit("gnssLocation", locationToMap(loc))
 
-                // Log location to file if logging is enabled
                 if (isLogging) {
                     writeLocationToLog(loc)
                 }
@@ -109,26 +142,39 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
             override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
         }
 
-        // Request location updates from GPS only
-        locationManager?.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, locationListener!!)
+        try {
+            locationManager?.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                LOCATION_UPDATE_INTERVAL_MS,
+                LOCATION_UPDATE_MIN_DISTANCE_M,
+                locationListener!!
+            )
+        } catch (e: Exception) {
+            Log.e("GnssModule", "Error requesting location updates: ${e.message}", e)
+        }
 
         statusCallback = object : GnssStatus.Callback() {
             override fun onSatelliteStatusChanged(status: GnssStatus) {
                 val count = status.satelliteCount
                 var used = 0
                 var cn0Sum = 0.0
+                var cn0Count = 0
                 val constellations = HashMap<String, Int>()
 
                 for (i in 0 until count) {
                     if (status.usedInFix(i)) used++
                     val cn0 = status.getCn0DbHz(i).toDouble()
-                    if (cn0.isFinite()) cn0Sum += cn0
+
+                    if (cn0.isFinite() && cn0 > 0) {
+                        cn0Sum += cn0
+                        cn0Count++
+                    }
 
                     val cname = constellationName(status.getConstellationType(i))
                     constellations[cname] = (constellations[cname] ?: 0) + 1
                 }
 
-                val avgCn0 = if (count > 0) cn0Sum / count else Double.NaN
+                val avgCn0 = if (cn0Count > 0) cn0Sum / cn0Count else Double.NaN
 
                 val map = Arguments.createMap().apply {
                     putInt("satellitesInView", count)
@@ -139,11 +185,15 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
                     putMap("constellations", constMap)
                 }
 
-                // Emit status data
                 emit("gnssStatus", map)
             }
         }
-        locationManager?.registerGnssStatusCallback(statusCallback!!)
+
+        try {
+            locationManager?.registerGnssStatusCallback(statusCallback!!)
+        } catch (e: Exception) {
+            Log.e("GnssModule", "Error registering GNSS status callback: ${e.message}", e)
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             measurementsCallback = object : GnssMeasurementsEvent.Callback() {
@@ -155,11 +205,30 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
                     val loggingNow = GnssModule.isLogging
                     val writerNow = GnssModule.logWriter
 
+                    // Get AGC data if available (Android 12+ / API 31+)
+                    val avgAgcLevelDb: Double? = try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            // AGC API only available on Android 12+
+                            getAverageAgc(eventArgs)
+                        } else {
+                            null
+                        }
+                    } catch (e: Exception) {
+                        Log.w("GnssModule", "Error accessing AGC data: ${e.message}")
+                        null
+                    }
+
                     for (m in eventArgs.measurements) {
                         val item = Arguments.createMap().apply {
                             putInt("svid", m.svid)
                             val cn0 = m.getCn0DbHz().toDouble()
                             if (cn0.isFinite()) putDouble("cn0DbHz", cn0)
+
+                            // Add AGC data if available
+                            if (avgAgcLevelDb != null && avgAgcLevelDb.isFinite()) {
+                                putDouble("agcLevelDb", avgAgcLevelDb)
+                            }
+
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                 try {
                                     if (m.hasCarrierFrequencyHz()) {
@@ -173,7 +242,7 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
                         arr.pushMap(item)
 
                         if (loggingNow && writerNow != null) {
-                            writeToLog(m, batchTimeNanos)
+                            writeToLog(m, batchTimeNanos, avgAgcLevelDb)
                         }
                     }
 
@@ -183,7 +252,9 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
 
             try {
                 locationManager?.registerGnssMeasurementsCallback(measurementsCallback!!)
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                Log.e("GnssModule", "Error registering GNSS measurements callback: ${e.message}", e)
+            }
         }
 
         isStarted = true
@@ -200,18 +271,11 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
     fun setRawLogging(enabled: Boolean, fileName: String?, promise: Promise) {
         try {
             if (enabled) {
-                // Always close any existing writer first
                 closeLogWriter()
-                // Then open a fresh one
                 logWriter = openLogWriter(fileName)
-                // Set flag AFTER opening the writer
                 isLogging = true
-
-                Log.d("GnssModule", "Logging enabled. isLogging=$isLogging, writer=${logWriter != null}")
-
                 promise.resolve(logFile?.absolutePath)
             } else {
-                Log.d("GnssModule", "Logging disabled")
                 isLogging = false
                 closeLogWriter()
                 promise.resolve(null)
@@ -294,11 +358,9 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
                 return
             }
 
-            // Delete the file
             if (file.exists()) {
                 val deleted = file.delete()
                 if (deleted) {
-                    Log.d("GnssModule", "Deleted log file: ${file.absolutePath}")
                     promise.resolve(true)
                 } else {
                     promise.reject("DELETE_ERROR", "Failed to delete file")
@@ -316,10 +378,13 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
         try {
             locationListener?.let { locationManager?.removeUpdates(it) }
             statusCallback?.let { locationManager?.unregisterGnssStatusCallback(it) }
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 measurementsCallback?.let { locationManager?.unregisterGnssMeasurementsCallback(it) }
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.e("GnssModule", "Error in stopInternal: ${e.message}", e)
+        }
 
         locationListener = null
         statusCallback = null
@@ -337,7 +402,7 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
         if (isStarted) stopInternal()
     }
 
-    private fun writeToLog(m: android.location.GnssMeasurement, batchTimeNanos: Long) {
+    private fun writeToLog(m: android.location.GnssMeasurement, batchTimeNanos: Long, agcLevelDb: Double? = null) {
         try {
             val writer = logWriter ?: return
 
@@ -359,8 +424,10 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
                 }
             } else ""
 
-            // CSV format: timestamp,datetime,type,latitude,longitude,altitude,accuracy,speed,bearing,provider,svid,constellation,cn0DbHz,carrierFrequencyHz,timeNanos
-            val csvLine = "$timestamp,$datetime,$type,,,,,,,,$svid,$constellation,$cn0Str,$carrierFreq,$batchTimeNanos\n"
+            val agcStr = if (agcLevelDb != null && agcLevelDb.isFinite()) agcLevelDb.toString() else ""
+
+            // CSV format: timestamp,datetime,type,latitude,longitude,altitude,accuracy,speed,bearing,provider,svid,constellation,cn0DbHz,carrierFrequencyHz,timeNanos,agcLevelDb
+            val csvLine = "$timestamp,$datetime,$type,,,,,,,,$svid,$constellation,$cn0Str,$carrierFreq,$batchTimeNanos,$agcStr\n"
 
             synchronized(writer) {
                 writer.append(csvLine)
@@ -390,8 +457,8 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
             val bearing = if (loc.hasBearing()) loc.bearing.toString() else ""
             val provider = loc.provider ?: ""
 
-            // CSV format: timestamp,datetime,type,latitude,longitude,altitude,accuracy,speed,bearing,provider,svid,constellation,cn0DbHz,carrierFrequencyHz,timeNanos
-            val csvLine = "$timestamp,$datetime,$type,$lat,$lon,$alt,$acc,$speed,$bearing,$provider,,,,,\n"
+            // CSV format: timestamp,datetime,type,latitude,longitude,altitude,accuracy,speed,bearing,provider,svid,constellation,cn0DbHz,carrierFrequencyHz,timeNanos,agcLevelDb
+            val csvLine = "$timestamp,$datetime,$type,$lat,$lon,$alt,$acc,$speed,$bearing,$provider,,,,,,\n"
 
             synchronized(writer) {
                 writer.append(csvLine)
@@ -434,13 +501,11 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
         val dir = File(reactCtx.filesDir, "gnss")
         if (!dir.exists()) dir.mkdirs()
 
-        // Delete previous log file if it only contains the header (no actual data)
+        // Delete previous log file if it only contains the header
         lastLogFile?.let { prevFile ->
             if (prevFile.exists() && prevFile.length() > 0) {
                 val lineCount = prevFile.readLines().size
-                // If only 1 line (header), delete it
                 if (lineCount <= 1) {
-                    Log.d("GnssModule", "Deleting empty log file: ${prevFile.absolutePath}")
                     prevFile.delete()
                 }
             }
@@ -456,15 +521,13 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
 
         logFile = f
         lastLogFile = f
-        linesWritten = 0  // Reset counter for new log file
-
-        Log.d("GnssModule", "Opening log file: ${f.absolutePath}")
+        linesWritten = 0
 
         val writer = BufferedWriter(FileWriter(f, true))
 
         // Write CSV header if new file
         if (isNewFile) {
-            writer.append("timestamp,datetime,type,latitude,longitude,altitude,accuracy,speed,bearing,provider,svid,constellation,cn0DbHz,carrierFrequencyHz,timeNanos\n")
+            writer.append("timestamp,datetime,type,latitude,longitude,altitude,accuracy,speed,bearing,provider,svid,constellation,cn0DbHz,carrierFrequencyHz,timeNanos,agcLevelDb\n")
             writer.flush()
         }
 
@@ -476,5 +539,40 @@ class GnssModule(private val reactCtx: ReactApplicationContext) :
         try { logWriter?.close() } catch (_: Exception) {}
         logWriter = null
         logFile = null
+    }
+
+    /**
+     * Get average AGC level from GNSS measurements event using reflection
+     * Only available on Android 12+ (API 31+)
+     * Uses reflection to avoid NoSuchMethodError on older Android versions
+     */
+    private fun getAverageAgc(eventArgs: GnssMeasurementsEvent): Double? {
+        return try {
+            // Use reflection to safely access the method
+            val method = eventArgs.javaClass.getMethod("getGnssAutomaticGainControls")
+            @Suppress("UNCHECKED_CAST")
+            val agcControls = method.invoke(eventArgs) as? Collection<*>
+
+            if (agcControls != null && agcControls.isNotEmpty()) {
+                var sum = 0.0
+                var count = 0
+                for (agc in agcControls) {
+                    // Get levelDb from each GnssAutomaticGainControl object
+                    val levelDbMethod = agc?.javaClass?.getMethod("getLevelDb")
+                    val levelDb = levelDbMethod?.invoke(agc) as? Double
+                    if (levelDb != null) {
+                        sum += levelDb
+                        count++
+                    }
+                }
+                if (count > 0) sum / count else null
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            // This is expected on Android < 12
+            Log.d("GnssModule", "AGC not available on this device (Android < 12)")
+            null
+        }
     }
 }

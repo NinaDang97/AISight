@@ -12,29 +12,57 @@ import {
   FlatList,
 } from 'react-native';
 import { SafeAreaWrapper } from '../../components/common/SafeAreaWrapper';
-import { Button } from '../../components/common/Button';
-import { colors, typography, spacing } from '../../styles';
+import { colors, typography, spacing, theme } from '../../styles';
 import {
   GnssModule,
   GnssExportModule,
   GnssLocation,
   GnssStatus,
+  GnssMeasurement,
   LoggingState,
   LogFileInfo,
 } from '../../native/GnssModule';
 
+// Types for satellite display using REAL measurement data
+interface SatelliteSignal {
+  id: string;
+  displayId: string;
+  system: string;
+  strength: string;
+  dbValue: number;
+}
+
+interface SatelliteDetail {
+  id: string;
+  displayId: string;
+  elevation: string;
+  azimuth: string;
+  cno: string;
+  dbValue: number;
+  constellation: string;
+  carrierFrequency?: string;
+}
+
 export const GnssScreen: React.FC = () => {
-  // State
+  // Backend state with REAL data
   const [isTracking, setIsTracking] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
-  const [gpsEnabled, setGpsEnabled] = useState(false);
+  const [isGpsEnabled, setIsGpsEnabled] = useState(false);
   const [hasPermission, setHasPermission] = useState(false);
   const [location, setLocation] = useState<GnssLocation | null>(null);
   const [status, setStatus] = useState<GnssStatus | null>(null);
+  const [measurements, setMeasurements] = useState<GnssMeasurement[]>([]);
   const [loggingState, setLoggingState] = useState<LoggingState | null>(null);
   const [showFileSelector, setShowFileSelector] = useState(false);
   const [logFiles, setLogFiles] = useState<LogFileInfo[]>([]);
   const [hasLogFiles, setHasLogFiles] = useState(false);
+
+  // Frontend display state
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [signalQuality, setSignalQuality] = useState('Unknown');
+  const [satelliteSignals, setSatelliteSignals] = useState<SatelliteSignal[]>([]);
+  const [satelliteDetails, setSatelliteDetails] = useState<SatelliteDetail[]>([]);
+  const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
 
   // Check GPS and permission status on mount
   useEffect(() => {
@@ -52,7 +80,7 @@ export const GnssScreen: React.FC = () => {
     }
   };
 
-  // Listen to GNSS events
+  // Listen to GNSS events - REAL data from backend
   useEffect(() => {
     const locationListener = DeviceEventEmitter.addListener(
       'gnssLocation',
@@ -68,10 +96,19 @@ export const GnssScreen: React.FC = () => {
       },
     );
 
+    // Add measurement listener if available
+    const measurementListener = DeviceEventEmitter.addListener(
+      'gnssMeasurement', // Check if this event exists in your native module
+      (data: GnssMeasurement[]) => {
+        setMeasurements(data);
+        updateSatelliteDisplays(data);
+      },
+    );
+
     const gpsStateListener = DeviceEventEmitter.addListener(
       'gpsStateChanged',
       (data: { enabled: boolean }) => {
-        setGpsEnabled(data.enabled);
+        setIsGpsEnabled(data.enabled);
         if (!data.enabled && isTracking) {
           Alert.alert(
             'GPS Disabled',
@@ -84,9 +121,23 @@ export const GnssScreen: React.FC = () => {
     return () => {
       locationListener.remove();
       statusListener.remove();
+      measurementListener.remove();
       gpsStateListener.remove();
     };
   }, [isTracking]);
+
+  // Timer for recording duration display
+  useEffect(() => {
+    let interval: any;
+    if (isLogging) {
+      interval = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } else {
+      setRecordingTime(0);
+    }
+    return () => clearInterval(interval);
+  }, [isLogging]);
 
   // Update logging state periodically when logging
   useEffect(() => {
@@ -100,11 +151,9 @@ export const GnssScreen: React.FC = () => {
   }, [isLogging]);
 
   const checkGpsAndPermissions = async () => {
-    // Check GPS
     const enabled = await GnssModule.isGpsEnabled();
-    setGpsEnabled(enabled);
+    setIsGpsEnabled(enabled);
 
-    // Check permission
     const permission = await PermissionsAndroid.check(
       PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
     );
@@ -137,7 +186,6 @@ export const GnssScreen: React.FC = () => {
   };
 
   const handleStartTracking = async () => {
-    // Check permission
     if (!hasPermission) {
       const granted = await requestLocationPermission();
       if (!granted) {
@@ -149,8 +197,7 @@ export const GnssScreen: React.FC = () => {
       }
     }
 
-    // Check GPS
-    if (!gpsEnabled) {
+    if (!isGpsEnabled) {
       Alert.alert(
         'GPS Required',
         'GPS is disabled. Please enable GPS in your device settings to collect GNSS data.',
@@ -159,7 +206,6 @@ export const GnssScreen: React.FC = () => {
       return;
     }
 
-    // Start tracking
     try {
       await GnssModule.start();
       setIsTracking(true);
@@ -173,16 +219,18 @@ export const GnssScreen: React.FC = () => {
     setIsTracking(false);
     setLocation(null);
     setStatus(null);
+    setMeasurements([]);
+    setSatelliteSignals([]);
+    setSatelliteDetails([]);
+    setSignalQuality('Unknown');
   };
 
   const handleToggleLogging = async () => {
     if (isLogging) {
       await GnssModule.setRawLogging(false, null);
       setIsLogging(false);
-      // Don't clear loggingState, just update it
       const state = await GnssModule.getLoggingState();
       setLoggingState(state);
-      // Check if files exist for export button
       await checkForLogFiles();
     } else {
       if (!isTracking) {
@@ -193,21 +241,13 @@ export const GnssScreen: React.FC = () => {
         return;
       }
 
-      // Check if module is available
-      if (!GnssModule || !GnssModule.setRawLogging) {
-        Alert.alert('Error', 'GNSS Module not available. Did you rebuild the app?');
-        return;
-      }
-
       try {
-        console.log('Attempting to start logging...');
         const result = await GnssModule.setRawLogging(true, null);
-        console.log('Logging started, file path:', result);
         setIsLogging(true);
+        setRecordingTime(0);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         Alert.alert('Error', `Failed to start logging: ${errorMessage}`);
-        console.error('Logging error:', error);
       }
     }
   };
@@ -226,18 +266,13 @@ export const GnssScreen: React.FC = () => {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       Alert.alert('Error', `Could not list log files: ${errorMessage}`);
-      console.error('List files error:', error);
     }
   };
 
   const handleExportFile = async (filePath: string, fileName: string) => {
     try {
       setShowFileSelector(false);
-
-      // Export to Downloads folder
-      // Pass the original filename to preserve it
       const exportedPath = await GnssExportModule.exportCSV(filePath, fileName);
-
       Alert.alert(
         'Export Successful',
         `${fileName} exported to Downloads/Aisight folder`,
@@ -245,8 +280,126 @@ export const GnssScreen: React.FC = () => {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       Alert.alert('Export Failed', `Could not export data: ${errorMessage}`);
-      console.error('Export error:', error);
     }
+  };
+
+  const handleDeleteFile = async (filePath: string, fileName: string) => {
+    Alert.alert(
+      'Delete Log File',
+      `Are you sure you want to delete ${fileName}? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await GnssModule.deleteLogFile(filePath);
+              Alert.alert('Deleted', `${fileName} has been deleted`);
+              const files = await GnssModule.listLogFiles();
+              setLogFiles(files);
+              setHasLogFiles(files.length > 0);
+              if (files.length === 0) {
+                setShowFileSelector(false);
+              }
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              Alert.alert('Delete Failed', `Could not delete file: ${errorMessage}`);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // Frontend display functions
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getSignalColor = (dbValue: number) => {
+    if (dbValue >= 40) return colors.success;
+    if (dbValue >= 35) return colors.warning;
+    return colors.error;
+  };
+
+  const getSignalQuality = (signals: SatelliteSignal[]): string => {
+    if (signals.length === 0) return 'Unknown';
+    const validSignals = signals.filter(s => s.dbValue > 0);
+    if (validSignals.length === 0) return 'Unknown';
+    
+    const avgStrength = validSignals.reduce((sum, signal) => sum + signal.dbValue, 0) / validSignals.length;
+    if (avgStrength >= 40) return 'Excellent';
+    if (avgStrength >= 35) return 'Good';
+    if (avgStrength >= 30) return 'Fair';
+    return 'Poor';
+  };
+
+  const getConstellationDisplayId = (svid: number, constellation: string): string => {
+    const prefixMap: { [key: string]: string } = {
+      'GPS': 'G',
+      'GLONASS': 'R', 
+      'GALILEO': 'E',
+      'BEIDOU': 'C',
+      'QZSS': 'J',
+      'SBAS': 'S'
+    };
+    
+    const prefix = prefixMap[constellation] || 'X';
+    return `${prefix}${svid.toString().padStart(2, '0')}`;
+  };
+
+  // Convert REAL GnssMeasurement data to display format
+  const updateSatelliteDisplays = (gnssMeasurements: GnssMeasurement[]) => {
+    const signals: SatelliteSignal[] = [];
+    const details: SatelliteDetail[] = [];
+
+    // Filter and sort measurements by signal strength
+    const validMeasurements = gnssMeasurements
+      .filter(m => m.cn0DbHz !== undefined && m.cn0DbHz > 0)
+      .sort((a, b) => (b.cn0DbHz || 0) - (a.cn0DbHz || 0));
+
+    validMeasurements.forEach((measurement, index) => {
+      const dbValue = measurement.cn0DbHz || 0;
+      const constellation = measurement.constellation || 'UNKNOWN';
+      const svid = measurement.svid || 0;
+      
+      const displayId = getConstellationDisplayId(svid, constellation);
+      const uniqueId = `${constellation}-${svid}`;
+
+      // Create signal entry
+      signals.push({
+        id: uniqueId,
+        displayId,
+        system: constellation,
+        strength: `${dbValue.toFixed(1)} dB-Hz`,
+        dbValue,
+      });
+
+      // Create detail entry (show top 8 strongest signals)
+      if (index < 8) {
+        const carrierFreq = measurement.carrierFrequencyHz 
+          ? `${(measurement.carrierFrequencyHz / 1e6).toFixed(1)} MHz`
+          : 'N/A';
+
+        details.push({
+          id: uniqueId,
+          displayId,
+          elevation: 'N/A', // Not available in GnssMeasurement type
+          azimuth: 'N/A',   // Not available in GnssMeasurement type  
+          cno: dbValue.toFixed(1),
+          dbValue,
+          constellation,
+          carrierFrequency: carrierFreq,
+        });
+      }
+    });
+
+    setSatelliteSignals(signals);
+    setSatelliteDetails(details);
+    setSignalQuality(getSignalQuality(signals));
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -260,319 +413,348 @@ export const GnssScreen: React.FC = () => {
     return date.toLocaleString();
   };
 
-  const handleDeleteFile = async (filePath: string, fileName: string) => {
-    Alert.alert(
-      'Delete Log File',
-      `Are you sure you want to delete ${fileName}? This action cannot be undone.`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await GnssModule.deleteLogFile(filePath);
-              Alert.alert('Deleted', `${fileName} has been deleted`);
-
-              // Refresh the file list
-              const files = await GnssModule.listLogFiles();
-              setLogFiles(files);
-              setHasLogFiles(files.length > 0);
-
-              // Close modal if no files left
-              if (files.length === 0) {
-                setShowFileSelector(false);
-              }
-            } catch (error) {
-              const errorMessage = error instanceof Error ? error.message : String(error);
-              Alert.alert('Delete Failed', `Could not delete file: ${errorMessage}`);
-              console.error('Delete error:', error);
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const canStartTracking = hasPermission && gpsEnabled;
-  const canExport = hasLogFiles;
-
   return (
     <SafeAreaWrapper backgroundColor={colors.background} barStyle="dark-content">
       <ScrollView style={styles.container}>
-        {/* Header */}
+        {/* Header - Frontend styling */}
         <View style={styles.header}>
-          <Text style={typography.heading2}>GNSS Data Collection</Text>
-          <Text style={[typography.bodyLarge, { color: colors.textSecondary }]}>
-            Real-time GPS tracking and logging
-          </Text>
+          <Text style={styles.headerTitle}>GNSS Logger</Text>
+          <Text style={styles.headerSubtitle}>Real time satellite tracking</Text>
         </View>
 
-        {/* GPS Status Card */}
-        <View style={styles.statusCard}>
-          <Text style={typography.heading3}>GPS Status</Text>
-          <View style={styles.statusRow}>
-            <View
+        {/* GPS Status Warning */}
+        {!isGpsEnabled && (
+          <View style={styles.section}>
+            <View style={[styles.card, styles.warningCard]}>
+              <Text style={styles.warningText}>
+                GPS is disabled. Please enable GPS to start tracking.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Permission Warning */}
+        {!hasPermission && (
+          <View style={styles.section}>
+            <View style={[styles.card, styles.warningCard]}>
+              <Text style={styles.warningText}>
+                Location permission is required. Tap Start Tracking to grant permission.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Tracking Control - Frontend styling */}
+        <View style={styles.section}>
+          <View style={styles.controlRow}>
+            <TouchableOpacity
               style={[
-                styles.statusIndicator,
-                { backgroundColor: gpsEnabled ? colors.success : colors.error },
+                styles.controlButton,
+                isTracking ? styles.stopButton : styles.startButton,
+                (!isGpsEnabled || !hasPermission) && styles.disabledButton,
               ]}
-            />
-            <Text
+              onPress={isTracking ? handleStopTracking : handleStartTracking}
+              disabled={!isGpsEnabled || !hasPermission}
+            >
+              <Text style={styles.controlButtonText}>
+                {isTracking ? 'Stop Tracking' : 'Start Tracking'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[
-                typography.bodyLarge,
-                { color: gpsEnabled ? colors.success : colors.error },
-              ]}>
-              {gpsEnabled ? 'GPS Enabled' : 'GPS Disabled'}
-            </Text>
+                styles.controlButton,
+                styles.secondaryButton,
+                (!isTracking || satelliteSignals.length === 0) && styles.disabledButton,
+              ]}
+              onPress={handleStopTracking}
+              disabled={!isTracking || satelliteSignals.length === 0}
+            >
+              <Text style={styles.controlButtonText}>Clear Data</Text>
+            </TouchableOpacity>
           </View>
-
-          {!gpsEnabled ? (
-            <View style={styles.warningBox}>
-              <Text style={[typography.bodySmall, { color: colors.error }]}>
-                GPS is required for GNSS data collection. Please enable GPS in
-                your device settings.
-              </Text>
-            </View>
-          ) : null}
-
-          {!hasPermission ? (
-            <View style={[styles.warningBox, { marginTop: spacing.small }]}>
-              <Text style={[typography.bodySmall, { color: colors.warning }]}>
-                Location permission is required. Tap Start Tracking to grant
-                permission.
-              </Text>
-            </View>
-          ) : null}
         </View>
-
-        {/* Control Buttons */}
-        <View style={styles.controlSection}>
-          <Button
-            title={isTracking ? 'Stop Tracking' : 'Start Tracking'}
-            variant={isTracking ? 'secondary' : 'primary'}
-            onPress={isTracking ? handleStopTracking : handleStartTracking}
-            disabled={!canStartTracking && !isTracking}
-            fullWidth
-          />
-          <Button
-            title={isLogging ? 'Stop Logging' : 'Start Logging'}
-            variant={isLogging ? 'outline' : 'primary'}
-            onPress={handleToggleLogging}
-            disabled={!isTracking}
-            fullWidth
-            style={styles.buttonSpacing}
-          />
-          <Button
-            title="Export to Downloads"
-            variant="outline"
-            onPress={handleShowExportDialog}
-            disabled={!canExport}
-            fullWidth
-            style={styles.buttonSpacing}
-          />
-        </View>
-
-        {/* Tracking Status Indicator */}
-        {isTracking ? (
-          <View style={styles.trackingBanner}>
-            <View style={styles.trackingIndicator} />
-            <Text style={[typography.body, { color: colors.success }]}>
-              Tracking Active
-            </Text>
-          </View>
-        ) : null}
 
         {/* Logging Status */}
-        {isLogging && loggingState ? (
-          <View style={styles.loggingCard}>
-            <Text style={typography.heading3}>Logging Status</Text>
-            <View style={styles.dataRow}>
-              <Text style={typography.body}>Status:</Text>
-              <View style={styles.statusRow}>
-                <View
-                  style={[
-                    styles.statusIndicator,
-                    { backgroundColor: colors.info },
-                  ]}
-                />
-                <Text style={[typography.bodyLarge, { color: colors.info }]}>
-                  Recording
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Logging Status</Text>
+          <View style={styles.card}>
+            <View style={styles.statusRow}>
+              <TouchableOpacity
+                style={[
+                  styles.recordButton,
+                  isLogging ? styles.recordingActive : styles.recordingStopped,
+                  !isTracking && styles.disabledButton,
+                ]}
+                onPress={handleToggleLogging}
+                disabled={!isTracking}
+              >
+                <Text style={styles.recordButtonText}>
+                  {isLogging ? `Recording - ${formatTime(recordingTime)}` : 'Start Recording'}
                 </Text>
-              </View>
+              </TouchableOpacity>
+              <Text style={styles.signalQuality}>Signal Quality: {signalQuality}</Text>
             </View>
-            <View style={styles.dataRow}>
-              <Text style={typography.body}>Records:</Text>
-              <Text style={typography.bodyLarge}>
-                {loggingState.linesWritten}
+            {loggingState && loggingState.linesWritten > 0 && (
+              <Text style={styles.exportInfo}>
+                {loggingState.linesWritten} data points recorded
               </Text>
-            </View>
+            )}
           </View>
-        ) : null}
-
-        {/* Location Data */}
-        <View style={styles.dataCard}>
-          <Text style={typography.heading3}>Location Data</Text>
-          {!isTracking ? (
-            <View style={styles.noDataContainer}>
-              <Text style={[typography.body, { color: colors.textSecondary }]}>
-                Start tracking to see location data
-              </Text>
-            </View>
-          ) : !gpsEnabled ? (
-            <View style={styles.noDataContainer}>
-              <Text style={[typography.body, { color: colors.error }]}>
-                No GPS signal - Enable GPS to receive measurements
-              </Text>
-            </View>
-          ) : !location ? (
-            <View style={styles.noDataContainer}>
-              <Text style={[typography.body, { color: colors.warning }]}>
-                Waiting for GPS fix...
-              </Text>
-            </View>
-          ) : (
-            <View>
-              <View style={styles.dataRow}>
-                <Text style={typography.body}>Latitude:</Text>
-                <Text style={typography.bodyLarge}>
-                  {location.latitude.toFixed(6)}°
-                </Text>
-              </View>
-              <View style={styles.dataRow}>
-                <Text style={typography.body}>Longitude:</Text>
-                <Text style={typography.bodyLarge}>
-                  {location.longitude.toFixed(6)}°
-                </Text>
-              </View>
-              {location.altitude ? (
-                <View style={styles.dataRow}>
-                  <Text style={typography.body}>Altitude:</Text>
-                  <Text style={typography.bodyLarge}>
-                    {location.altitude.toFixed(1)}m
-                  </Text>
-                </View>
-              ) : null}
-              {location.accuracy ? (
-                <View style={styles.dataRow}>
-                  <Text style={typography.body}>Accuracy:</Text>
-                  <Text
-                    style={[
-                      typography.bodyLarge,
-                      {
-                        color:
-                          location.accuracy < 10
-                            ? colors.success
-                            : location.accuracy < 50
-                              ? colors.warning
-                              : colors.error,
-                      },
-                    ]}>
-                    ±{location.accuracy.toFixed(1)}m
-                  </Text>
-                </View>
-              ) : null}
-              {location.speed !== undefined && location.speed > 0 ? (
-                <View style={styles.dataRow}>
-                  <Text style={typography.body}>Speed:</Text>
-                  <Text style={typography.bodyLarge}>
-                    {location.speed.toFixed(1)} m/s
-                  </Text>
-                </View>
-              ) : null}
-              {location.bearing !== undefined ? (
-                <View style={styles.dataRow}>
-                  <Text style={typography.body}>Bearing:</Text>
-                  <Text style={typography.bodyLarge}>
-                    {location.bearing.toFixed(0)}°
-                  </Text>
-                </View>
-              ) : null}
-              <View style={styles.dataRow}>
-                <Text style={typography.body}>Provider:</Text>
-                <Text
-                  style={[
-                    typography.bodyLarge,
-                    { color: colors.success, fontWeight: 'bold' },
-                  ]}>
-                  {location.provider.toUpperCase()}
-                </Text>
-              </View>
-            </View>
-          )}
         </View>
 
-        {/* Satellite Status */}
-        <View style={styles.dataCard}>
-          <Text style={typography.heading3}>Satellite Status</Text>
-          {!isTracking || !status ? (
-            <View style={styles.noDataContainer}>
-              <Text style={[typography.body, { color: colors.textSecondary }]}>
-                No satellite data
+        {/* 1️⃣ Position Info - REAL data from backend */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Position Information</Text>
+          <View style={styles.card}>
+            {!isTracking ? (
+              <Text style={styles.noDataText}>
+                Start tracking to see position data
               </Text>
-            </View>
-          ) : (
-            <View>
-              <View style={styles.dataRow}>
-                <Text style={typography.body}>In View:</Text>
-                <Text style={typography.bodyLarge}>
-                  {status.satellitesInView}
-                </Text>
-              </View>
-              <View style={styles.dataRow}>
-                <Text style={typography.body}>Used in Fix:</Text>
-                <Text
-                  style={[
-                    typography.bodyLarge,
-                    {
-                      color:
-                        status.satellitesUsed >= 4
-                          ? colors.success
-                          : colors.warning,
-                    },
-                  ]}>
-                  {status.satellitesUsed}
-                </Text>
-              </View>
-              {status.avgCn0DbHz ? (
+            ) : !location ? (
+              <Text style={styles.noDataText}>
+                Waiting for GPS fix...
+              </Text>
+            ) : (
+              <View>
                 <View style={styles.dataRow}>
-                  <Text style={typography.body}>Avg Signal:</Text>
-                  <Text style={typography.bodyLarge}>
-                    {status.avgCn0DbHz.toFixed(1)} dB-Hz
+                  <Text style={styles.dataLabel}>Latitude:</Text>
+                  <Text style={styles.dataValue}>
+                    {location.latitude.toFixed(6)}°
                   </Text>
                 </View>
-              ) : null}
-              {status.constellations ? (
-                <View style={styles.constellationSection}>
-                  <Text style={[typography.body, { marginTop: spacing.small }]}>
-                    Constellations:
+                <View style={styles.dataRow}>
+                  <Text style={styles.dataLabel}>Longitude:</Text>
+                  <Text style={styles.dataValue}>
+                    {location.longitude.toFixed(6)}°
                   </Text>
-                  {Object.entries(status.constellations).map(([name, count]) => (
-                    <View key={name} style={styles.constellationRow}>
-                      <Text style={typography.bodySmall}>{name}:</Text>
-                      <Text style={typography.bodySmall}>{count}</Text>
+                </View>
+                {location.altitude && (
+                  <View style={styles.dataRow}>
+                    <Text style={styles.dataLabel}>Altitude:</Text>
+                    <Text style={styles.dataValue}>
+                      {location.altitude.toFixed(1)}m
+                    </Text>
+                  </View>
+                )}
+                {location.accuracy && (
+                  <View style={styles.dataRow}>
+                    <Text style={styles.dataLabel}>Accuracy:</Text>
+                    <Text style={[styles.dataValue, { 
+                      color: location.accuracy < 10 ? colors.success : 
+                            location.accuracy < 50 ? colors.warning : colors.error 
+                    }]}>
+                      ±{location.accuracy.toFixed(1)}m
+                    </Text>
+                  </View>
+                )}
+                {location.speed !== undefined && location.speed > 0 && (
+                  <View style={styles.dataRow}>
+                    <Text style={styles.dataLabel}>Speed:</Text>
+                    <Text style={styles.dataValue}>
+                      {location.speed.toFixed(1)} m/s
+                    </Text>
+                  </View>
+                )}
+                {location.bearing !== undefined && (
+                  <View style={styles.dataRow}>
+                    <Text style={styles.dataLabel}>Bearing:</Text>
+                    <Text style={styles.dataValue}>
+                      {location.bearing.toFixed(0)}°
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.dataRow}>
+                  <Text style={styles.dataLabel}>Provider:</Text>
+                  <Text style={[styles.dataValue, { color: colors.success }]}>
+                    {location.provider.toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* 2️⃣ GNSS Signal Overview - REAL measurement data */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            GNSS Signal Overview {satelliteSignals.length > 0 && `(${satelliteSignals.length} satellites)`}
+          </Text>
+          <View style={styles.card}>
+            {!isTracking ? (
+              <Text style={styles.noDataText}>
+                Start tracking to see signal data
+              </Text>
+            ) : satelliteSignals.length === 0 ? (
+              <Text style={styles.noDataText}>
+                Waiting for satellite measurements...
+              </Text>
+            ) : (
+              <View>
+                {/* Overview Row with REAL measurement data */}
+                <View style={styles.overviewRow}>
+                  <View style={styles.overviewItem}>
+                    <Text style={styles.overviewLabel}>Avg Signal</Text>
+                    <Text style={styles.overviewValue}>
+                      {satelliteSignals.length > 0 
+                        ? `${(satelliteSignals.reduce((sum, s) => sum + s.dbValue, 0) / satelliteSignals.length).toFixed(1)} dB-Hz`
+                        : 'N/A'
+                      }
+                    </Text>
+                  </View>
+                  <View style={styles.overviewItem}>
+                    <Text style={styles.overviewLabel}>In View</Text>
+                    <Text style={styles.overviewValue}>{satelliteSignals.length}</Text>
+                  </View>
+                  <View style={styles.overviewItem}>
+                    <Text style={styles.overviewLabel}>Used in Fix</Text>
+                    <Text style={[
+                      styles.overviewValue,
+                      { color: status && status.satellitesUsed >= 4 ? colors.success : colors.warning }
+                    ]}>
+                      {status?.satellitesUsed || 'N/A'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Constellation Counts - Derived from REAL measurements */}
+                {satelliteSignals.length > 0 && (
+                  <View style={styles.constellationSection}>
+                    <Text style={styles.dataLabel}>Constellations:</Text>
+                    <View style={styles.constellationRow}>
+                      {Object.entries(
+                        satelliteSignals.reduce((acc, signal) => {
+                          acc[signal.system] = (acc[signal.system] || 0) + 1;
+                          return acc;
+                        }, {} as Record<string, number>)
+                      ).map(([name, count]) => (
+                        <View key={name} style={styles.constellationItem}>
+                          <Text style={styles.constellationName}>{name}</Text>
+                          <Text style={styles.constellationCount}>{count}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* Satellite Signals - REAL measurement data */}
+                <View style={styles.signalSection}>
+                  <Text style={styles.dataLabel}>Satellite Signals (C/No):</Text>
+                  {satelliteSignals.map((satellite, index) => (
+                    <View
+                      key={satellite.id}
+                      style={[
+                        styles.signalItem,
+                        index === satelliteSignals.length - 1 && styles.lastItem,
+                      ]}
+                    >
+                      <Text style={styles.satelliteId}>{satellite.displayId}</Text>
+                      <Text style={styles.satelliteSystem}>{satellite.system}</Text>
+                      <View style={styles.signalBarContainer}>
+                        <View 
+                          style={[
+                            styles.signalBar,
+                            { 
+                              width: `${Math.min(100, (satellite.dbValue / 50) * 100)}%`,
+                              backgroundColor: getSignalColor(satellite.dbValue)
+                            }
+                          ]} 
+                        />
+                      </View>
+                      <Text
+                        style={[styles.signalStrength, { color: getSignalColor(satellite.dbValue) }]}
+                      >
+                        {satellite.strength}
+                      </Text>
                     </View>
                   ))}
                 </View>
-              ) : null}
-            </View>
-          )}
+
+                {/* Advanced Details Toggle */}
+                {satelliteDetails.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.expandButton}
+                    onPress={() => setShowAdvancedDetails(!showAdvancedDetails)}
+                  >
+                    <Text style={styles.expandButtonText}>
+                      {showAdvancedDetails ? '▲ Hide' : '▼ Show'} Advanced Details
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
         </View>
 
+        {/* 3️⃣ Advanced Satellite Details - REAL measurement data */}
+        {showAdvancedDetails && satelliteDetails.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Satellite Details ({satelliteDetails.length} strongest shown)
+            </Text>
+            <View style={styles.card}>
+              <View style={styles.tableHeader}>
+                <Text style={styles.tableHeaderText}>ID</Text>
+                <Text style={styles.tableHeaderText}>Constellation</Text>
+                <Text style={styles.tableHeaderText}>C/No</Text>
+                <Text style={styles.tableHeaderText}>Carrier Freq</Text>
+              </View>
+              {satelliteDetails.map((satellite, index) => (
+                <View
+                  key={satellite.id}
+                  style={[
+                    styles.tableRow,
+                    index === satelliteDetails.length - 1 && styles.lastItem,
+                  ]}
+                >
+                  <Text style={styles.tableCell}>{satellite.displayId}</Text>
+                  <Text style={styles.tableCell}>{satellite.constellation}</Text>
+                  <Text style={[styles.tableCell, { color: getSignalColor(satellite.dbValue) }]}>
+                    {satellite.cno}
+                  </Text>
+                  <Text style={styles.tableCell}>{satellite.carrierFrequency || 'N/A'}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Data Quality Info */}
-        {isTracking && location ? (
-          <View style={styles.infoCard}>
-            <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
-              All logged data is GPS-only. No network location fallback is used.
+        {isTracking && location && (
+          <View style={styles.section}>
+            <View style={[styles.card]}>
+              <Text>
+                All logged data is GPS-only. No network location fallback is used.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Export Data */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Export & File Management</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={[
+                styles.controlButton,
+                styles.secondaryButton,
+                !hasLogFiles && styles.disabledButton,
+              ]}
+              onPress={handleShowExportDialog}
+              disabled={!hasLogFiles}
+            >
+              <Text style={styles.controlButtonText}>
+                Export to Downloads
+              </Text>
+            </TouchableOpacity>
+            <Text style={[styles.exportInfo, { marginTop: spacing.small }]}>
+              View, export, and delete all saved log files
             </Text>
           </View>
-        ) : null}
+        </View>
       </ScrollView>
 
-      {/* File Selector Modal */}
+      {/* File Selector Modal - REAL backend functionality */}
       <Modal
         visible={showFileSelector}
         transparent
@@ -597,15 +779,10 @@ export const GnssScreen: React.FC = () => {
                   <View style={styles.fileInfo}>
                     <Text style={typography.body}>{item.name}</Text>
                     <View style={styles.fileMetadata}>
-                      <Text
-                        style={[typography.bodySmall, { color: colors.textSecondary }]}>
+                      <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
                         {formatFileSize(item.size)}
                       </Text>
-                      <Text
-                        style={[
-                          typography.bodySmall,
-                          { color: colors.textSecondary, marginLeft: spacing.small },
-                        ]}>
+                      <Text style={[typography.bodySmall, { color: colors.textSecondary, marginLeft: spacing.small }]}>
                         {formatDate(item.lastModified)}
                       </Text>
                     </View>
@@ -643,106 +820,283 @@ export const GnssScreen: React.FC = () => {
   );
 };
 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: spacing.medium,
+    backgroundColor: colors.background,
   },
   header: {
-    marginTop: spacing.large,
-    marginBottom: spacing.large,
+    backgroundColor: colors.primary,
+    padding: spacing.large,
+    paddingTop: spacing.xlarge,
   },
-  statusCard: {
+  headerTitle: {
+    ...typography.heading2,
+    color: colors.textInverse,
+    fontWeight: '600',
+  },
+  headerSubtitle: {
+    ...typography.body,
+    color: colors.textInverse,
+    opacity: 0.9,
+    marginTop: spacing.xsmall,
+  },
+  section: {
+    marginTop: spacing.large,
+    paddingHorizontal: spacing.medium,
+  },
+  sectionTitle: {
+    ...typography.heading4,
+    color: colors.textPrimary,
+    marginBottom: spacing.small,
+    fontWeight: '600',
+  },
+  card: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: theme.borderRadius.medium,
     padding: spacing.medium,
+    ...theme.shadows.small,
+  },
+  cardTitle: {
+    ...typography.heading5,
+    color: colors.textPrimary,
     marginBottom: spacing.medium,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  },
+  controlRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.small,
+  },
+  controlButton: {
+    flex: 1,
+    padding: spacing.medium,
+    borderRadius: theme.borderRadius.medium,
+    alignItems: 'center',
+  },
+  startButton: {
+    backgroundColor: colors.success,
+  },
+  stopButton: {
+    backgroundColor: colors.error,
+  },
+  secondaryButton: {
+    backgroundColor: colors.secondary,
+  },
+  disabledButton: {
+    backgroundColor: colors.textDisabled,
+    opacity: 0.6,
+  },
+  controlButtonText: {
+    ...typography.button,
+    color: colors.textInverse,
+    fontWeight: '600',
   },
   statusRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: spacing.small,
   },
-  statusIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: spacing.small,
-  },
-  warningBox: {
-    marginTop: spacing.medium,
-    padding: spacing.small,
-    backgroundColor: colors.error + '20',
-    borderRadius: 8,
-  },
-  controlSection: {
-    marginBottom: spacing.medium,
-  },
-  buttonSpacing: {
-    marginTop: spacing.small,
-  },
-  trackingBanner: {
-    flexDirection: 'row',
+  recordButton: {
+    paddingHorizontal: spacing.medium,
+    paddingVertical: spacing.small,
+    borderRadius: theme.borderRadius.medium,
+    minWidth: 140,
     alignItems: 'center',
-    backgroundColor: colors.success + '20',
-    padding: spacing.small,
-    borderRadius: 8,
-    marginBottom: spacing.medium,
   },
-  trackingIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  recordingActive: {
+    backgroundColor: colors.error,
+  },
+  recordingStopped: {
     backgroundColor: colors.success,
-    marginRight: spacing.small,
   },
-  loggingCard: {
-    backgroundColor: colors.info + '20',
-    borderRadius: 12,
-    padding: spacing.medium,
-    marginBottom: spacing.medium,
+  recordButtonText: {
+    ...typography.body,
+    color: colors.textInverse,
+    fontWeight: '600',
   },
-  dataCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: spacing.medium,
-    marginBottom: spacing.medium,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  signalQuality: {
+    ...typography.body,
+    color: colors.textSecondary,
   },
+  // Data display styles
   dataRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: spacing.small,
+    paddingVertical: spacing.small,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  noDataContainer: {
-    paddingVertical: spacing.large,
+  dataLabel: {
+    ...typography.body,
+    color: colors.textPrimary,
+    fontWeight: '500',
+  },
+  dataValue: {
+    ...typography.body,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  noDataText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    padding: spacing.medium,
+  },
+  // Overview styles
+  overviewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.medium,
+  },
+  overviewItem: {
     alignItems: 'center',
+    flex: 1,
   },
+  overviewLabel: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginBottom: spacing.xsmall,
+  },
+  overviewValue: {
+    ...typography.heading5,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  // Constellation styles
   constellationSection: {
-    marginTop: spacing.small,
+    marginBottom: spacing.medium,
   },
   constellationRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: spacing.small,
+  },
+  constellationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: spacing.small,
+    paddingVertical: spacing.xsmall,
+    borderRadius: theme.borderRadius.small,
+    marginRight: spacing.small,
+    marginBottom: spacing.small,
+  },
+  constellationName: {
+    ...typography.bodySmall,
+    color: colors.primary,
+    fontWeight: '600',
+    marginRight: spacing.xsmall,
+  },
+  constellationCount: {
+    ...typography.bodySmall,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  // Signal display styles
+  signalSection: {
+    marginTop: spacing.medium,
+  },
+  signalItem: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingLeft: spacing.medium,
-    marginTop: spacing.xsmall,
+    alignItems: 'center',
+    paddingVertical: spacing.small,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  infoCard: {
-    backgroundColor: colors.primary + '10',
-    borderRadius: 8,
+  lastItem: {
+    borderBottomWidth: 0,
+  },
+  satelliteId: {
+    ...typography.body,
+    fontWeight: '600',
+    width: 50,
+    color: colors.textPrimary,
+  },
+  satelliteSystem: {
+    ...typography.body,
+    color: colors.textSecondary,
+    width: 70,
+  },
+  signalBarContainer: {
+    flex: 1,
+    height: 8,
+    backgroundColor: colors.border,
+    borderRadius: 4,
+    marginHorizontal: spacing.small,
+    overflow: 'hidden',
+  },
+  signalBar: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  signalStrength: {
+    ...typography.body,
+    fontWeight: '600',
+    width: 80,
+    textAlign: 'right',
+  },
+  // Expand button
+  expandButton: {
     padding: spacing.small,
-    marginBottom: spacing.large,
+    alignItems: 'center',
+    marginTop: spacing.small,
   },
+  expandButtonText: {
+    ...typography.body,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  // Table styles
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: colors.primaryDark,
+    padding: spacing.small,
+    borderTopLeftRadius: theme.borderRadius.small,
+    borderTopRightRadius: theme.borderRadius.small,
+    marginHorizontal: -spacing.small,
+    marginTop: -spacing.small,
+    marginBottom: spacing.small,
+  },
+  tableHeaderText: {
+    ...typography.bodySmall,
+    color: colors.textInverse,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: spacing.small,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  tableCell: {
+    ...typography.body,
+    flex: 1,
+    textAlign: 'center',
+    color: colors.textPrimary,
+  },
+  // Warning styles
+  warningCard: {
+    backgroundColor: colors.error + '20',
+    borderLeftWidth: 4,
+    borderLeftColor: colors.error,
+  },
+  warningText: {
+    ...typography.body,
+    color: colors.error,
+    fontWeight: '500',
+  },
+  exportInfo: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  // Modal styles (from first version)
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
