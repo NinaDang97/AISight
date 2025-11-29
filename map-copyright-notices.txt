@@ -1,0 +1,8 @@
+Map copyright notices
+
+Map data hosting
+Copyright (c) MapTiler https://www.maptiler.com/copyright/
+
+Map data
+Copyright (c) OpenStreetMap contributors https://www.openstreetmap.org/copyright
+Licensed under Open Database License (ODbL) https://opendatacommons.org/licenses/odbl/
