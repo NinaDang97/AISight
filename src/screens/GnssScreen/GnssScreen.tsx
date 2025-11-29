@@ -502,7 +502,7 @@ export const GnssScreen: React.FC = () => {
             <Text style={styles.sectionTitle}>Export & File Management</Text>
           </View>
           <View style={styles.card}>
-            <GnssExportManager disabled={!isTracking} />
+            <GnssExportManager/>
           </View>
         </View>
       </ScrollView>
