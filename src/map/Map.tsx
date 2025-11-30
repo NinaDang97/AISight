@@ -103,11 +103,15 @@ const Map = () => {
 
   const { hasLocationPermission, requestLocation } = usePermissions();
   const { setCardVisible, setVesselData } = useVesselDetails();
-  const { vesselList } = useVesselMqtt();
+  const { vesselList, metadata } = useVesselMqtt();
   const shouldUseLiveFeed = vesselList.length > 0;
   const selectedVessel = useMemo(
     () => vesselList.find(v => Number(v.mmsi) === selectedVesselMmsi),
     [vesselList, selectedVesselMmsi],
+  );
+  const getVesselName = useCallback(
+    (mmsi: string | number) => metadata?.[String(mmsi)]?.name ?? null,
+    [metadata],
   );
 
   const liveVesselCollection = useMemo<VesselFC>(() => {
@@ -415,19 +419,27 @@ const Map = () => {
       return;
     }
 
+    const lower = trimmed.toLowerCase();
     const matches = vesselList
-      .filter(v => v.mmsi.includes(trimmed))
+      .filter(v => {
+        if (v.mmsi.includes(trimmed)) {
+          return true;
+        }
+        const name = getVesselName(v.mmsi);
+        return Boolean(name && name.toLowerCase().includes(lower));
+      })
       .slice(0, 5);
     setSearchResults(matches);
-    setSearchResultsVisible(true);
+    setSearchResultsVisible(matches.length > 0);
   };
 
   const handleSelectVessel = (vessel: LiveVessel) => {
     const numericMmsi = Number(vessel.mmsi);
+    const vesselName = getVesselName(vessel.mmsi);
 
     setIsShipEnabled(true);
     setSelectedVesselMmsi(numericMmsi);
-    setSearchQuery(vessel.mmsi);
+    setSearchQuery(vesselName || vessel.mmsi);
     setSearchResults([]);
     setSearchResultsVisible(false);
     setCardVisible(true);
@@ -552,16 +564,16 @@ const Map = () => {
         </TouchableOpacity>
       </View>
 
-      {searchResultsVisible && searchResults.length && <View style={styles.searchResultsContainer}>
+      {searchResultsVisible && searchResults.length > 0 && <View style={styles.searchResultsContainer}>
         {searchResults.map(v => (
           <TouchableOpacity
             key={v.mmsi}
             style={styles.searchResultItem}
             onPress={() => handleSelectVessel(v)}
           >
-            <Text style={styles.searchResultTitle}>{v.mmsi}</Text>
+            <Text style={styles.searchResultTitle}>{getVesselName(v.mmsi) || v.mmsi}</Text>
             <Text style={styles.searchResultSubtitle}>
-              {typeof v.sog === 'number' ? `${v.sog} kts` : 'Speed N/A'}
+              MMSI {v.mmsi} · {typeof v.sog === 'number' ? `${v.sog} kts` : 'Speed N/A'}
             </Text>
           </TouchableOpacity>
         ))}
