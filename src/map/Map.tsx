@@ -86,6 +86,7 @@ const Map = () => {
   const mapRef = React.useRef<MapViewRef>(null);
   const vesselUpdateThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastVesselUpdateRef = useRef(0);
+  const lastScheduledSelectedRef = useRef<number | null>(null);
   const [isShipEnabled, setIsShipEnabled] = React.useState(false);
   const [isGnssEnabled, setIsGnssEnabled] = useState(false);
   const [selectedGnss, setSelectedGnss] = React.useState<SelectedGnss | null>(null);
@@ -104,6 +105,10 @@ const Map = () => {
   const { setCardVisible, setVesselData } = useVesselDetails();
   const { vesselList } = useVesselMqtt();
   const shouldUseLiveFeed = vesselList.length > 0;
+  const selectedVessel = useMemo(
+    () => vesselList.find(v => Number(v.mmsi) === selectedVesselMmsi),
+    [vesselList, selectedVesselMmsi],
+  );
 
   const liveVesselCollection = useMemo<VesselFC>(() => {
     if (!vesselList.length) {
@@ -113,6 +118,33 @@ const Map = () => {
     const center = viewCenter ?? defaultCameraCenter;
     const bounds = viewBounds;
     const maxVisible = 500;
+
+    const toFeature = (v: LiveVessel) => {
+      const numericMmsi = Number(v.mmsi);
+      const rawRot = v.raw?.rot;
+
+      return {
+        type: 'Feature',
+        mmsi: numericMmsi,
+        geometry: {
+          type: 'Point',
+          coordinates: [v.lon, v.lat],
+        },
+        properties: {
+          mmsi: numericMmsi,
+          sog: typeof v.sog === 'number' ? v.sog : 0,
+          cog: typeof v.cog === 'number' ? v.cog : 0,
+          navStat: typeof v.navStat === 'number' ? v.navStat : 0,
+          rot: typeof rawRot === 'number' ? rawRot : 0,
+          posAcc: Boolean(v.posAcc),
+          raim: Boolean(v.raim),
+          heading: typeof v.heading === 'number' ? v.heading : undefined,
+          timestamp: v.receivedAt,
+          isSelected: selectedVesselMmsi === numericMmsi,
+          layerId: 'ships',
+        },
+      };
+    };
 
     const bounded = vesselList.filter(v => {
       if (typeof v.lat !== 'number' || typeof v.lon !== 'number') {
@@ -138,38 +170,21 @@ const Map = () => {
       .slice(0, maxVisible)
       .map(({ v }) => v);
 
+    let features = sorted.map(toFeature);
+
+    if (selectedVessel && typeof selectedVessel.lat === 'number' && typeof selectedVessel.lon === 'number') {
+      const selectedMmsi = Number(selectedVessel.mmsi);
+      const alreadyIncluded = features.some(f => f.mmsi === selectedMmsi);
+      if (!alreadyIncluded) {
+        features = [toFeature(selectedVessel), ...features].slice(0, maxVisible);
+      }
+    }
+
     return {
       type: 'FeatureCollection',
-      features: sorted
-        .filter(v => typeof v.lat === 'number' && typeof v.lon === 'number')
-        .map(v => {
-          const numericMmsi = Number(v.mmsi);
-          const rawRot = v.raw?.rot;
-
-          return {
-            type: 'Feature',
-            mmsi: numericMmsi,
-            geometry: {
-              type: 'Point',
-              coordinates: [v.lon, v.lat],
-            },
-            properties: {
-              mmsi: numericMmsi,
-              sog: typeof v.sog === 'number' ? v.sog : 0,
-              cog: typeof v.cog === 'number' ? v.cog : 0,
-              navStat: typeof v.navStat === 'number' ? v.navStat : 0,
-              rot: typeof rawRot === 'number' ? rawRot : 0,
-              posAcc: Boolean(v.posAcc),
-              raim: Boolean(v.raim),
-              heading: typeof v.heading === 'number' ? v.heading : undefined,
-              timestamp: v.receivedAt,
-              isSelected: selectedVesselMmsi === numericMmsi,
-              layerId: 'ships',
-            },
-          };
-        }),
+      features,
     };
-  }, [vesselList, selectedVesselMmsi, viewBounds, viewCenter]);
+  }, [vesselList, selectedVessel, selectedVesselMmsi, viewBounds, viewCenter]);
 
   useEffect(() => {
     setMapStyle(prev => {
@@ -180,13 +195,13 @@ const Map = () => {
   }, [isGnssEnabled, isShipEnabled]);
 
   const scheduleVesselStyleUpdate = useCallback(
-    (collection: VesselFC) => {
+    (collection: VesselFC, { immediate = false }: { immediate?: boolean } = {}) => {
       if (!collection.features.length) {
         return;
       }
       const now = Date.now();
       const elapsed = now - lastVesselUpdateRef.current;
-      const delay = Math.max(0, 1000 - elapsed); // throttle ~1000ms
+      const delay = immediate ? 0 : Math.max(0, 1000 - elapsed); // throttle ~1000ms
 
       if (vesselUpdateThrottleRef.current) {
         clearTimeout(vesselUpdateThrottleRef.current);
@@ -204,14 +219,23 @@ const Map = () => {
     if (!isShipEnabled || !shouldUseLiveFeed) {
       return;
     }
-    scheduleVesselStyleUpdate(liveVesselCollection);
+    const shouldForceSelectedUpdate =
+      selectedVesselMmsi !== null && selectedVesselMmsi !== lastScheduledSelectedRef.current;
+    scheduleVesselStyleUpdate(liveVesselCollection, { immediate: shouldForceSelectedUpdate });
+    lastScheduledSelectedRef.current = selectedVesselMmsi;
     return () => {
       if (vesselUpdateThrottleRef.current) {
         clearTimeout(vesselUpdateThrottleRef.current);
         vesselUpdateThrottleRef.current = null;
       }
     };
-  }, [isShipEnabled, shouldUseLiveFeed, liveVesselCollection, scheduleVesselStyleUpdate]);
+  }, [
+    isShipEnabled,
+    shouldUseLiveFeed,
+    liveVesselCollection,
+    scheduleVesselStyleUpdate,
+    selectedVesselMmsi,
+  ]);
 
   useEffect(() => {
     const initBounds = async () => {
@@ -401,6 +425,7 @@ const Map = () => {
   const handleSelectVessel = (vessel: LiveVessel) => {
     const numericMmsi = Number(vessel.mmsi);
 
+    setIsShipEnabled(true);
     setSelectedVesselMmsi(numericMmsi);
     setSearchQuery(vessel.mmsi);
     setSearchResults([]);
@@ -514,7 +539,7 @@ const Map = () => {
 
         {/* Vessel Filter Button */}
         <TouchableOpacity
-          style={styles.vesselButton}
+          style={[styles.vesselButton, isShipEnabled && styles.buttonActive]}
           onPress={handleVesselFilterPress}
           activeOpacity={0.8}
         >
@@ -553,7 +578,7 @@ const Map = () => {
 
       {/* GNSS Toggle Button */}
       <TouchableOpacity
-        style={[styles.gnssButton, isGnssEnabled && styles.gnssButtonActive]}
+        style={[styles.gnssButton, isGnssEnabled && styles.buttonActive]}
         onPress={handleGnssToggle}
         activeOpacity={0.8}
       >
@@ -631,6 +656,9 @@ const styles = StyleSheet.create({
   icon: {
     width: 48,
     height: 48,
+  },
+  buttonActive: {
+    backgroundColor: '#08A315',
   },
   gnssDetailCard: {
     position: 'absolute',
@@ -796,9 +824,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
-  },
-  gnssButtonActive: {
-    backgroundColor: '#08A315',
   },
   gnssIcon: {
     width: 24,
