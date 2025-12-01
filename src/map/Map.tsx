@@ -19,6 +19,7 @@ import {
   CameraStop,
   MapView,
   MapViewRef,
+  ShapeSource,
   UserLocation,
 } from '@maplibre/maplibre-react-native';
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
@@ -94,7 +95,10 @@ const Map = () => {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isFollowingUser, setIsFollowingUser] = useState(false);
-  const [viewBounds, setViewBounds] = useState<{ northeast: GeoJSONPosition; southwest: GeoJSONPosition } | null>(null);
+  const [viewBounds, setViewBounds] = useState<{
+    northeast: GeoJSONPosition;
+    southwest: GeoJSONPosition;
+  } | null>(null);
   const [viewCenter, setViewCenter] = useState<GeoJSONPosition | null>(null);
   const [mapStyle, setMapStyle] = useState<StyleSpecification>(() => getAppropriateMapStyle());
   const [selectedVesselMmsi, setSelectedVesselMmsi] = useState<number | null>(null);
@@ -177,7 +181,11 @@ const Map = () => {
 
     let features = sorted.map(toFeature);
 
-    if (selectedVessel && typeof selectedVessel.lat === 'number' && typeof selectedVessel.lon === 'number') {
+    if (
+      selectedVessel &&
+      typeof selectedVessel.lat === 'number' &&
+      typeof selectedVessel.lon === 'number'
+    ) {
       const selectedMmsi = Number(selectedVessel.mmsi);
       const alreadyIncluded = features.some(f => f.mmsi === selectedMmsi);
       if (!alreadyIncluded) {
@@ -270,16 +278,19 @@ const Map = () => {
     [],
   );
 
-  const handleRegionDidChange = useCallback((feature: GeoJSONFeature<GeoJSON.Point, RegionPayload>) => {
-    const bounds = feature.properties?.visibleBounds;
-    if (bounds?.length === 2) {
-      setViewBounds({ northeast: bounds[0], southwest: bounds[1] });
-    }
-    const center = feature.geometry?.coordinates as GeoJSONPosition | undefined;
-    if (center?.length === 2) {
-      setViewCenter(center);
-    }
-  }, []);
+  const handleRegionDidChange = useCallback(
+    (feature: GeoJSONFeature<GeoJSON.Point, RegionPayload>) => {
+      const bounds = feature.properties?.visibleBounds;
+      if (bounds?.length === 2) {
+        setViewBounds({ northeast: bounds[0], southwest: bounds[1] });
+      }
+      const center = feature.geometry?.coordinates as GeoJSONPosition | undefined;
+      if (center?.length === 2) {
+        setViewCenter(center);
+      }
+    },
+    [],
+  );
 
   const handleMapPress = useCallback(
     async (feature: GeoJSONFeature) => {
@@ -304,7 +315,13 @@ const Map = () => {
           await mapRef.current.queryRenderedFeaturesAtPoint(
             [screenPointX, screenPointY],
             undefined,
-            ['gnss-mock-points', 'normal-active-ships', 'normal-stationary-ships', 'anomaly-active-ships', 'anomaly-stationary-ships'],
+            [
+              'gnss-mock-points',
+              'normal-active-ships',
+              'normal-stationary-ships',
+              'anomaly-active-ships',
+              'anomaly-stationary-ships',
+            ],
           );
 
         if (!collection.features || !collection.features.length) {
@@ -415,7 +432,7 @@ const Map = () => {
   const handleSearchChange = (text: string) => {
     setSearchQuery(text);
     const trimmed = text.trim();
-    if(!trimmed) {
+    if (!trimmed) {
       setSearchResults([]);
       setSearchResultsVisible(false);
       return;
@@ -472,7 +489,7 @@ const Map = () => {
       zoomLevel: 10,
       animationDuration: 800,
     });
-  }
+  };
 
   // Handle vessel filter button press
   const handleVesselFilterPress = () => {
@@ -526,7 +543,8 @@ const Map = () => {
         style={styles.map}
         mapStyle={mapStyle}
         onPress={handleMapPress}
-        attributionEnabled={false}
+        attributionEnabled={true}
+        attributionPosition={{ bottom: 8, left: 8 }}
         compassEnabled={false}
         onRegionWillChange={handleRegionWillChange}
         onRegionDidChange={handleRegionDidChange}
@@ -571,20 +589,22 @@ const Map = () => {
         </TouchableOpacity>
       </View>
 
-      {searchResultsVisible && searchResults.length > 0 && <View style={styles.searchResultsContainer}>
-        {searchResults.map(v => (
-          <TouchableOpacity
-            key={v.mmsi}
-            style={styles.searchResultItem}
-            onPress={() => handleSelectVessel(v)}
-          >
-            <Text style={styles.searchResultTitle}>{getVesselName(v.mmsi) || v.mmsi}</Text>
-            <Text style={styles.searchResultSubtitle}>
-              MMSI {v.mmsi} · {typeof v.sog === 'number' ? `${v.sog} kts` : 'Speed N/A'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>}
+      {searchResultsVisible && searchResults.length > 0 && (
+        <View style={styles.searchResultsContainer}>
+          {searchResults.map(v => (
+            <TouchableOpacity
+              key={v.mmsi}
+              style={styles.searchResultItem}
+              onPress={() => handleSelectVessel(v)}
+            >
+              <Text style={styles.searchResultTitle}>{getVesselName(v.mmsi) || v.mmsi}</Text>
+              <Text style={styles.searchResultSubtitle}>
+                MMSI {v.mmsi} · {typeof v.sog === 'number' ? `${v.sog} kts` : 'Speed N/A'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {/* Map Layer Button */}
       <TouchableOpacity
