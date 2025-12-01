@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   View,
@@ -28,17 +28,10 @@ import type {
   Position as GeoJSONPosition,
 } from 'geojson';
 
-import {
-  fetchMetadataForAllVessels,
-  fetchVessels,
-  makeAisApiUrl,
-  VesselFC,
-  VesselMetadataCollection,
-} from './map-utils';
+import { VesselFC } from './map-utils';
 import {
   addGnssMockLayer,
   addShipLayer,
-  defaultStyle,
   getAppropriateMapStyle,
   removeGnssMockLayer,
   removeShipLayer,
@@ -52,6 +45,7 @@ import { LocationService } from '../services/location';
 import { logger } from '../utils/logger';
 import { useVesselDetails } from '../components/contexts/VesselDetailsContext';
 import GnssLayer from './GnssLayer';
+import { useVesselMqtt } from '../components/contexts/VesselMqttContext';
 
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
@@ -74,29 +68,128 @@ type RegionPayload = {
   pitch: number;
 };
 
+type LiveVessel = ReturnType<typeof useVesselMqtt>['vesselList'][number];
+
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
-  zoomLevel: 6,
+  zoomLevel: 8,
 };
 
 const defaultCameraCenter = cameraInitStop.centerCoordinate as GeoJSONPosition;
 
+const emptyVesselCollection: VesselFC = {
+  type: 'FeatureCollection',
+  features: [],
+};
+
 const Map = () => {
-  // Initialize map with appropriate style based on API key availability
-  const [mapStyle, setMapStyle] = React.useState<StyleSpecification>(defaultStyle);
   const cameraRef = React.useRef<CameraRef>(null);
   const mapRef = React.useRef<MapViewRef>(null);
+  const vesselUpdateThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastVesselUpdateRef = useRef(0);
+  const lastScheduledSelectedRef = useRef<number | null>(null);
   const [isShipEnabled, setIsShipEnabled] = React.useState(false);
   const [isGnssEnabled, setIsGnssEnabled] = useState(false);
   const [selectedGnss, setSelectedGnss] = React.useState<SelectedGnss | null>(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isFollowingUser, setIsFollowingUser] = useState(false);
-  const [vesselMetadataState, setVesselMetadataState] =
-    React.useState<VesselMetadataCollection | null>(null);
+  const [viewBounds, setViewBounds] = useState<{ northeast: GeoJSONPosition; southwest: GeoJSONPosition } | null>(null);
+  const [viewCenter, setViewCenter] = useState<GeoJSONPosition | null>(null);
+  const [mapStyle, setMapStyle] = useState<StyleSpecification>(() => getAppropriateMapStyle());
+  const [selectedVesselMmsi, setSelectedVesselMmsi] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResultsVisible, setSearchResultsVisible] = useState(false);
+  const [searchResults, setSearchResults] = useState<LiveVessel[]>([]);
 
   const { hasLocationPermission, requestLocation } = usePermissions();
   const { setCardVisible, setVesselData } = useVesselDetails();
+  const { vesselList, metadata } = useVesselMqtt();
+  const shouldUseLiveFeed = vesselList.length > 0;
+  const selectedVessel = useMemo(
+    () => vesselList.find(v => Number(v.mmsi) === selectedVesselMmsi),
+    [vesselList, selectedVesselMmsi],
+  );
+  const getVesselName = useCallback(
+    (mmsi: string | number) => metadata?.[String(mmsi)]?.name ?? null,
+    [metadata],
+  );
+
+  const liveVesselCollection = useMemo<VesselFC>(() => {
+    if (!vesselList.length) {
+      return emptyVesselCollection;
+    }
+
+    const center = viewCenter ?? defaultCameraCenter;
+    const bounds = viewBounds;
+    const maxVisible = 500;
+
+    const toFeature = (v: LiveVessel) => {
+      const numericMmsi = Number(v.mmsi);
+      const rawRot = v.raw?.rot;
+
+      return {
+        type: 'Feature',
+        mmsi: numericMmsi,
+        geometry: {
+          type: 'Point',
+          coordinates: [v.lon, v.lat],
+        },
+        properties: {
+          mmsi: numericMmsi,
+          sog: typeof v.sog === 'number' ? v.sog : 0,
+          cog: typeof v.cog === 'number' ? v.cog : 0,
+          navStat: typeof v.navStat === 'number' ? v.navStat : 0,
+          rot: typeof rawRot === 'number' ? rawRot : 0,
+          posAcc: Boolean(v.posAcc),
+          raim: Boolean(v.raim),
+          heading: typeof v.heading === 'number' ? v.heading : undefined,
+          timestamp: v.receivedAt,
+          isSelected: selectedVesselMmsi === numericMmsi,
+          layerId: 'ships',
+        },
+      };
+    };
+
+    const bounded = vesselList.filter(v => {
+      if (typeof v.lat !== 'number' || typeof v.lon !== 'number') {
+        return false;
+      }
+      if (!bounds) {
+        return true;
+      }
+      // Vessel latitude between top and bottom of the screen/box
+      const inLat = v.lat <= bounds.northeast[1] && v.lat >= bounds.southwest[1];
+      // Vessel latitude between left and right of the screen/box
+      const inLon = v.lon <= bounds.northeast[0] && v.lon >= bounds.southwest[0];
+      return inLat && inLon;
+    });
+
+    // Euclidean distance: sort vessels by proximity to the center (closer first)
+    const sorted = bounded
+      .map(v => ({
+        v,
+        d: Math.hypot(v.lon - center[0], v.lat - center[1]),
+      }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, maxVisible)
+      .map(({ v }) => v);
+
+    let features = sorted.map(toFeature);
+
+    if (selectedVessel && typeof selectedVessel.lat === 'number' && typeof selectedVessel.lon === 'number') {
+      const selectedMmsi = Number(selectedVessel.mmsi);
+      const alreadyIncluded = features.some(f => f.mmsi === selectedMmsi);
+      if (!alreadyIncluded) {
+        features = [toFeature(selectedVessel), ...features].slice(0, maxVisible);
+      }
+    }
+
+    return {
+      type: 'FeatureCollection',
+      features,
+    };
+  }, [vesselList, selectedVessel, selectedVesselMmsi, viewBounds, viewCenter]);
 
   useEffect(() => {
     setMapStyle(prev => {
@@ -105,58 +198,66 @@ const Map = () => {
     });
   }, [isGnssEnabled, isShipEnabled]);
 
+  const scheduleVesselStyleUpdate = useCallback(
+    (collection: VesselFC, { immediate = false }: { immediate?: boolean } = {}) => {
+      if (!collection.features.length) {
+        return;
+      }
+      const now = Date.now();
+      const elapsed = now - lastVesselUpdateRef.current;
+      const delay = immediate ? 0 : Math.max(0, 1000 - elapsed); // throttle ~1000ms
+
+      if (vesselUpdateThrottleRef.current) {
+        clearTimeout(vesselUpdateThrottleRef.current);
+      }
+
+      vesselUpdateThrottleRef.current = setTimeout(() => {
+        lastVesselUpdateRef.current = Date.now();
+        setMapStyle(prev => updateShipData(prev, collection));
+      }, delay);
+    },
+    [],
+  );
+
   useEffect(() => {
-    let mounted = true;
-    setMapStyle(getAppropriateMapStyle());
-
-    const initMetadata = async () => {
-      try {
-        const metadata = await fetchMetadataForAllVessels();
-        setVesselMetadataState(metadata);
-      } catch (err) {
-        console.warn('Failed to load vessel metadata on mount', err);
-      }
-    };
-    initMetadata();
-
-    const tick = async () => {
-      try {
-        updateVesselData();
-      } catch (err) {
-        console.warn('Periodic ship update failed', err);
-      }
-    };
-
-    tick();
-    const id = setInterval(tick, 60_000);
-
+    if (!isShipEnabled || !shouldUseLiveFeed) {
+      return;
+    }
+    const shouldForceSelectedUpdate =
+      selectedVesselMmsi !== null && selectedVesselMmsi !== lastScheduledSelectedRef.current;
+    scheduleVesselStyleUpdate(liveVesselCollection, { immediate: shouldForceSelectedUpdate });
+    lastScheduledSelectedRef.current = selectedVesselMmsi;
     return () => {
-      mounted = false;
-      clearInterval(id);
+      if (vesselUpdateThrottleRef.current) {
+        clearTimeout(vesselUpdateThrottleRef.current);
+        vesselUpdateThrottleRef.current = null;
+      }
     };
+  }, [
+    isShipEnabled,
+    shouldUseLiveFeed,
+    liveVesselCollection,
+    scheduleVesselStyleUpdate,
+    selectedVesselMmsi,
+  ]);
+
+  useEffect(() => {
+    const initBounds = async () => {
+      try {
+        const bounds = await mapRef.current?.getVisibleBounds();
+        const center = await mapRef.current?.getCenter();
+        if (bounds) {
+          setViewBounds({ northeast: bounds[0], southwest: bounds[1] });
+        }
+        if (center) {
+          setViewCenter(center);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    initBounds();
   }, []);
-
-  const updateVesselData = async () => {
-    const currentCenter = await mapRef.current?.getCenter();
-    if (!currentCenter) throw new Error('Error getting map center');
-    const visibleBounds = await mapRef.current?.getVisibleBounds();
-    if (!visibleBounds) throw new Error('Error getting map bounds');
-
-    const url = makeAisApiUrl(currentCenter, visibleBounds);
-    const vessels: VesselFC = await fetchVessels(url);
-
-    // Populate the metadata property
-    vessels.features.forEach(
-      feature =>
-        (feature.properties.vesselMetadata = vesselMetadataState?.metadataRecords.get(
-          feature.mmsi,
-        )),
-    );
-
-    logger.info(`Vessels updated`);
-
-    setMapStyle(prev => updateShipData(prev, vessels));
-  };
 
   // Handle user interaction with map - disable following mode when user scrolls
   const handleRegionWillChange = useCallback(
@@ -168,6 +269,17 @@ const Map = () => {
     },
     [],
   );
+
+  const handleRegionDidChange = useCallback((feature: GeoJSONFeature<GeoJSON.Point, RegionPayload>) => {
+    const bounds = feature.properties?.visibleBounds;
+    if (bounds?.length === 2) {
+      setViewBounds({ northeast: bounds[0], southwest: bounds[1] });
+    }
+    const center = feature.geometry?.coordinates as GeoJSONPosition | undefined;
+    if (center?.length === 2) {
+      setViewCenter(center);
+    }
+  }, []);
 
   const handleMapPress = useCallback(
     async (feature: GeoJSONFeature) => {
@@ -192,7 +304,7 @@ const Map = () => {
           await mapRef.current.queryRenderedFeaturesAtPoint(
             [screenPointX, screenPointY],
             undefined,
-            ['gnss-mock-points', 'ships', 'passenger-ships'],
+            ['gnss-mock-points', 'normal-active-ships', 'normal-stationary-ships', 'anomaly-active-ships', 'anomaly-stationary-ships'],
           );
 
         if (!collection.features || !collection.features.length) {
@@ -220,6 +332,10 @@ const Map = () => {
           setSelectedGnss(null);
           setCardVisible(true);
           setVesselData(tappedFeature);
+          const tappedMmsi = Number((tappedFeature.properties as { mmsi?: number })?.mmsi);
+          if (!Number.isNaN(tappedMmsi)) {
+            setSelectedVesselMmsi(tappedMmsi);
+          }
         }
       } catch (error) {
         console.warn('Unable to resolve GNSS selection', error);
@@ -231,6 +347,7 @@ const Map = () => {
   );
 
   const resetCamera = () => {
+    setIsFollowingUser(false);
     cameraRef.current?.setCamera(cameraInitStop);
   };
 
@@ -295,13 +412,67 @@ const Map = () => {
   };
 
   // Handle search input
-  const handleSearchPress = () => {
-    // TODO: Implement search functionality
-    // - Search for vessels by name/MMSI
-    // - Search for locations/coordinates
-    // - Show search results dropdown
-    console.log('Search pressed');
+  const handleSearchChange = (text: string) => {
+    setSearchQuery(text);
+    const trimmed = text.trim();
+    if(!trimmed) {
+      setSearchResults([]);
+      setSearchResultsVisible(false);
+      return;
+    }
+
+    const lower = trimmed.toLowerCase();
+    const matches = vesselList
+      .filter(v => {
+        if (v.mmsi.includes(trimmed)) {
+          return true;
+        }
+        const name = getVesselName(v.mmsi);
+        return Boolean(name && name.toLowerCase().includes(lower));
+      })
+      .slice(0, 5);
+    setSearchResults(matches);
+    setSearchResultsVisible(matches.length > 0);
   };
+
+  const handleSelectVessel = (vessel: LiveVessel) => {
+    const numericMmsi = Number(vessel.mmsi);
+    const vesselName = getVesselName(vessel.mmsi);
+
+    setIsShipEnabled(true);
+    setSelectedVesselMmsi(numericMmsi);
+    setSearchQuery(vesselName || vessel.mmsi);
+    setSearchResults([]);
+    setSearchResultsVisible(false);
+    setCardVisible(true);
+
+    setVesselData({
+      type: 'Feature',
+      mmsi: numericMmsi,
+      geometry: {
+        type: 'Point',
+        coordinates: [vessel.lon, vessel.lat],
+      },
+      properties: {
+        mmsi: numericMmsi,
+        sog: typeof vessel.sog === 'number' ? vessel.sog : 0,
+        cog: typeof vessel.cog === 'number' ? vessel.cog : 0,
+        navStat: typeof vessel.navStat === 'number' ? vessel.navStat : 0,
+        rot: typeof vessel.rot === 'number' ? vessel.rot : 0,
+        posAcc: Boolean(vessel.posAcc),
+        raim: Boolean(vessel.raim),
+        heading: typeof vessel.heading === 'number' ? vessel.heading : undefined,
+        timestamp: vessel.receivedAt,
+        layerId: 'ships',
+      },
+    });
+
+    cameraRef.current?.setCamera({
+      centerCoordinate: [vessel.lon, vessel.lat],
+      zoomLevel: 10,
+      animationDuration: 800,
+    });
+  }
 
   // Handle vessel filter button press
   const handleVesselFilterPress = () => {
@@ -358,7 +529,7 @@ const Map = () => {
         attributionEnabled={false}
         compassEnabled={false}
         onRegionWillChange={handleRegionWillChange}
-        onRegionDidChange={updateVesselData}
+        onRegionDidChange={handleRegionDidChange}
       >
         <GnssLayer gnssEnabled={isGnssEnabled} />
         <Camera
@@ -371,20 +542,23 @@ const Map = () => {
 
       {/* Search Bar and Vessel Filter */}
       <View style={styles.topControlsContainer}>
-        <TouchableOpacity style={styles.searchBar} onPress={handleSearchPress} activeOpacity={0.7}>
+        <View style={styles.searchBar}>
           <Image source={searchIcon} style={styles.searchIcon} resizeMode="contain" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search..."
+            placeholder="Search by vessel mmsi or name..."
             placeholderTextColor="#999"
-            editable={false}
-            pointerEvents="none"
+            value={searchQuery}
+            onChangeText={handleSearchChange}
+            onFocus={() => setSearchResultsVisible(Boolean(searchQuery.trim()))}
+            autoCorrect={false}
+            autoCapitalize="none"
           />
-        </TouchableOpacity>
+        </View>
 
         {/* Vessel Filter Button */}
         <TouchableOpacity
-          style={styles.vesselButton}
+          style={[styles.vesselButton, isShipEnabled && styles.buttonActive]}
           onPress={handleVesselFilterPress}
           activeOpacity={0.8}
         >
@@ -397,6 +571,21 @@ const Map = () => {
         </TouchableOpacity>
       </View>
 
+      {searchResultsVisible && searchResults.length > 0 && <View style={styles.searchResultsContainer}>
+        {searchResults.map(v => (
+          <TouchableOpacity
+            key={v.mmsi}
+            style={styles.searchResultItem}
+            onPress={() => handleSelectVessel(v)}
+          >
+            <Text style={styles.searchResultTitle}>{getVesselName(v.mmsi) || v.mmsi}</Text>
+            <Text style={styles.searchResultSubtitle}>
+              MMSI {v.mmsi} · {typeof v.sog === 'number' ? `${v.sog} kts` : 'Speed N/A'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>}
+
       {/* Map Layer Button */}
       <TouchableOpacity
         style={styles.mapLayerButton}
@@ -408,7 +597,7 @@ const Map = () => {
 
       {/* GNSS Toggle Button */}
       <TouchableOpacity
-        style={[styles.gnssButton, isGnssEnabled && styles.gnssButtonActive]}
+        style={[styles.gnssButton, isGnssEnabled && styles.buttonActive]}
         onPress={handleGnssToggle}
         activeOpacity={0.8}
       >
@@ -487,6 +676,9 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
   },
+  buttonActive: {
+    backgroundColor: '#08A315',
+  },
   gnssDetailCard: {
     position: 'absolute',
     bottom: 20,
@@ -557,6 +749,31 @@ const styles = StyleSheet.create({
     color: '#333',
     padding: 0,
   },
+  searchResultsContainer: {
+    position: 'absolute',
+    top: 116,
+    left: 16,
+    right: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 8,
+  },
+  searchResultItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e5e7eb',
+  },
+  searchResultTitle: {
+    fontSize: 16,
+    color: '#111827',
+    fontWeight: '600',
+  },
+  searchResultSubtitle: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
   vesselButton: {
     width: 48,
     height: 48,
@@ -626,9 +843,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
-  },
-  gnssButtonActive: {
-    backgroundColor: '#08A315',
   },
   gnssIcon: {
     width: 24,

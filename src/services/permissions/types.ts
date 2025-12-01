@@ -22,8 +22,6 @@ export interface PermissionState {
 export interface PermissionServiceInterface {
   checkNotificationPermission: () => Promise<PermissionStatus>;
   checkLocationPermission: () => Promise<PermissionStatus>;
-  requestNotificationPermission: () => Promise<PermissionStatus>;
-  requestLocationPermission: () => Promise<PermissionStatus>;
   openSettings: () => Promise<void>;
   hasNotificationPermission: () => Promise<boolean>;
   hasLocationPermission: () => Promise<boolean>;
