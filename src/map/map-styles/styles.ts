@@ -96,6 +96,7 @@ export const addShipLayer = (prevStyle: StyleSpecification): StyleSpecification 
       normalStationaryShipLayer,
       anomalyActiveShipLayer,
       anomalyStationaryShipLayer,
+      selectedShipLayer,
       shipTextLayer,
     ],
   };
@@ -109,6 +110,7 @@ export const removeShipLayer = (prevStyle: StyleSpecification): StyleSpecificati
       layer.id !== normalStationaryShipLayer.id &&
       layer.id !== anomalyActiveShipLayer.id &&
       layer.id !== anomalyStationaryShipLayer.id &&
+      layer.id !== selectedShipLayer.id &&
       layer.id !== shipTextLayer.id,
   );
 
@@ -269,6 +271,20 @@ const anomalyStationaryShipLayer: CircleLayerSpecification = {
     'circle-color': colors.offline,
     'circle-stroke-color': colors.error,
     'circle-stroke-width': 3,
+  },
+};
+
+const selectedShipLayer: CircleLayerSpecification = {
+  id: 'selected-ship',
+  type: 'circle',
+  source: 'fintraffic-ships',
+  filter: ['==', ['get', 'isSelected'], true],
+  paint: {
+    'circle-radius': 10,
+    'circle-color': colors.online,
+    'circle-opacity': 0.8,
+    'circle-stroke-color': '#f59e0b',
+    'circle-stroke-width': 4,
   },
 };
 
