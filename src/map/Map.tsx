@@ -51,7 +51,7 @@ import { useVesselMqtt } from '../components/contexts/VesselMqttContext';
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
 const vesselIcon = require('../../assets/images/icons/vessel-icon.png');
-const portIcon = require('../../assets/images/icons/port-icon.png');
+const northIcon = require('../../assets/images/icons/north-icon.png');
 const mapLayerIcon = require('../../assets/images/icons/map-layer-icon.png');
 const antennaIcon = require('../../assets/images/icons/antenna-icon.png');
 
@@ -502,15 +502,13 @@ const Map = () => {
     setIsShipEnabled(prev => !prev);
   };
 
-  // Handle port button press
-  const handlePortPress = () => {
-    // TODO: Implement port functionality
-    // - Toggle port visibility on map
-    // - Show port information (name, type, facilities)
-    // - Display port markers with icons
-    // - Filter ports by type (cargo, passenger, fishing, etc.)
-    // - Show distance to nearest port
-    console.log('Port button pressed');
+  // Handle north button press
+  const handleNorthPress = () => {
+    console.log('North button pressed');
+    cameraRef.current?.setCamera({
+      heading: 0,
+      animationDuration: 1000,
+    });
   };
 
   // Handle map layer button press
@@ -584,8 +582,8 @@ const Map = () => {
         </TouchableOpacity>
 
         {/* Port Button */}
-        <TouchableOpacity style={styles.portButton} onPress={handlePortPress} activeOpacity={0.8}>
-          <Image source={portIcon} style={styles.portIcon} resizeMode="contain" />
+        <TouchableOpacity style={styles.portButton} onPress={handleNorthPress} activeOpacity={0.8}>
+          <Image source={northIcon} style={styles.portIcon} resizeMode="contain" />
         </TouchableOpacity>
       </View>
 
