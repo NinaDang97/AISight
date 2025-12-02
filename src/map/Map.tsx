@@ -52,7 +52,7 @@ const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
 const vesselIcon = require('../../assets/images/icons/vessel-icon.png');
 const northIcon = require('../../assets/images/icons/north-icon.png');
-const mapLayerIcon = require('../../assets/images/icons/map-layer-icon.png');
+const mapLayerIcon = require('../../assets/images/icons/black-location-icon.png');
 const antennaIcon = require('../../assets/images/icons/antenna-icon.png');
 
 type SelectedGnss = {
@@ -511,14 +511,15 @@ const Map = () => {
     });
   };
 
-  // Handle map layer button press
-  const handleMapLayerPress = () => {
+  // Handle map reset button press
+  const handleMapResetPress = () => {
     // TODO: Implement map layer switching functionality
     // - Show layer options: Standard, Satellite, Hybrid, Nautical Chart
     // - Allow user to toggle between different map styles
     // - Save selected layer preference
     // - Update map view with selected layer
-    console.log('Map layer button pressed');
+    console.log('Map reset button pressed');
+    resetCamera();
   };
 
   // Handle GNSS toggle button press
@@ -606,8 +607,8 @@ const Map = () => {
 
       {/* Map Layer Button */}
       <TouchableOpacity
-        style={styles.mapLayerButton}
-        onPress={handleMapLayerPress}
+        style={styles.mapResetButton}
+        onPress={handleMapResetPress}
         activeOpacity={0.8}
       >
         <Image source={mapLayerIcon} style={styles.mapLayerIcon} resizeMode="contain" />
@@ -635,8 +636,6 @@ const Map = () => {
           <Image source={navigationIcon} style={styles.navigationIcon} resizeMode="contain" />
         )}
       </TouchableOpacity>
-
-      <Button title="Reset Camera" onPress={resetCamera} />
 
       {/* Location Permission Modal */}
       <LocationPermissionModal
@@ -826,7 +825,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
   },
-  mapLayerButton: {
+  mapResetButton: {
     position: 'absolute',
     top: 128,
     right: 16,
@@ -868,7 +867,7 @@ const styles = StyleSheet.create({
   },
   navigationButton: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 20,
     right: 20,
     width: 48,
     height: 48,
