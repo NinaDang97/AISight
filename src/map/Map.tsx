@@ -19,6 +19,7 @@ import {
   CameraStop,
   MapView,
   MapViewRef,
+  ShapeSource,
   UserLocation,
 } from '@maplibre/maplibre-react-native';
 import { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
@@ -44,13 +45,14 @@ import { RESULTS } from 'react-native-permissions';
 import { LocationService } from '../services/location';
 import { logger } from '../utils/logger';
 import { useVesselDetails } from '../components/contexts/VesselDetailsContext';
+import GnssLayer from './GnssLayer';
 import { useVesselMqtt } from '../components/contexts/VesselMqttContext';
 
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
 const vesselIcon = require('../../assets/images/icons/vessel-icon.png');
-const portIcon = require('../../assets/images/icons/port-icon.png');
-const mapLayerIcon = require('../../assets/images/icons/map-layer-icon.png');
+const northIcon = require('../../assets/images/icons/north-icon.png');
+const mapLayerIcon = require('../../assets/images/icons/black-location-icon.png');
 const antennaIcon = require('../../assets/images/icons/antenna-icon.png');
 
 type SelectedGnss = {
@@ -93,7 +95,10 @@ const Map = () => {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isFollowingUser, setIsFollowingUser] = useState(false);
-  const [viewBounds, setViewBounds] = useState<{ northeast: GeoJSONPosition; southwest: GeoJSONPosition } | null>(null);
+  const [viewBounds, setViewBounds] = useState<{
+    northeast: GeoJSONPosition;
+    southwest: GeoJSONPosition;
+  } | null>(null);
   const [viewCenter, setViewCenter] = useState<GeoJSONPosition | null>(null);
   const [mapStyle, setMapStyle] = useState<StyleSpecification>(() => getAppropriateMapStyle());
   const [selectedVesselMmsi, setSelectedVesselMmsi] = useState<number | null>(null);
@@ -176,7 +181,11 @@ const Map = () => {
 
     let features = sorted.map(toFeature);
 
-    if (selectedVessel && typeof selectedVessel.lat === 'number' && typeof selectedVessel.lon === 'number') {
+    if (
+      selectedVessel &&
+      typeof selectedVessel.lat === 'number' &&
+      typeof selectedVessel.lon === 'number'
+    ) {
       const selectedMmsi = Number(selectedVessel.mmsi);
       const alreadyIncluded = features.some(f => f.mmsi === selectedMmsi);
       if (!alreadyIncluded) {
@@ -192,8 +201,7 @@ const Map = () => {
 
   useEffect(() => {
     setMapStyle(prev => {
-      let next = isGnssEnabled ? addGnssMockLayer(prev) : removeGnssMockLayer(prev);
-      next = isShipEnabled ? addShipLayer(next) : removeShipLayer(next);
+      let next = isShipEnabled ? addShipLayer(prev) : removeShipLayer(prev);
       return next;
     });
   }, [isGnssEnabled, isShipEnabled]);
@@ -260,27 +268,33 @@ const Map = () => {
   }, []);
 
   // Handle user interaction with map - disable following mode when user scrolls
-  const handleRegionWillChange = useCallback((feature: GeoJSONFeature<GeoJSON.Point, RegionPayload>) => {
-    // If user manually interacts with the map, disable following mode
-    if (feature.properties?.isUserInteraction) {
-      setIsFollowingUser(false);
-    }
-  }, []);
+  const handleRegionWillChange = useCallback(
+    (feature: GeoJSONFeature<GeoJSON.Point, RegionPayload>) => {
+      // If user manually interacts with the map, disable following mode
+      if (feature.properties?.isUserInteraction) {
+        setIsFollowingUser(false);
+      }
+    },
+    [],
+  );
 
-  const handleRegionDidChange = useCallback((feature: GeoJSONFeature<GeoJSON.Point, RegionPayload>) => {
-    const bounds = feature.properties?.visibleBounds;
-    if (bounds?.length === 2) {
-      setViewBounds({ northeast: bounds[0], southwest: bounds[1] });
-    }
-    const center = feature.geometry?.coordinates as GeoJSONPosition | undefined;
-    if (center?.length === 2) {
-      setViewCenter(center);
-    }
-  }, []);
+  const handleRegionDidChange = useCallback(
+    (feature: GeoJSONFeature<GeoJSON.Point, RegionPayload>) => {
+      const bounds = feature.properties?.visibleBounds;
+      if (bounds?.length === 2) {
+        setViewBounds({ northeast: bounds[0], southwest: bounds[1] });
+      }
+      const center = feature.geometry?.coordinates as GeoJSONPosition | undefined;
+      if (center?.length === 2) {
+        setViewCenter(center);
+      }
+    },
+    [],
+  );
 
   const handleMapPress = useCallback(
     async (feature: GeoJSONFeature) => {
-      if (!mapRef.current || !isGnssEnabled && !isShipEnabled) {
+      if (!mapRef.current || (!isGnssEnabled && !isShipEnabled)) {
         setSelectedGnss(null);
         setCardVisible(false);
         return;
@@ -301,10 +315,16 @@ const Map = () => {
           await mapRef.current.queryRenderedFeaturesAtPoint(
             [screenPointX, screenPointY],
             undefined,
-            ['gnss-mock-points', 'normal-active-ships', 'normal-stationary-ships', 'anomaly-active-ships', 'anomaly-stationary-ships'],
+            [
+              'gnss-mock-points',
+              'normal-active-ships',
+              'normal-stationary-ships',
+              'anomaly-active-ships',
+              'anomaly-stationary-ships',
+            ],
           );
-        
-        if(!collection.features || !collection.features.length) {
+
+        if (!collection.features || !collection.features.length) {
           setSelectedGnss(null);
           setCardVisible(false);
         }
@@ -334,7 +354,6 @@ const Map = () => {
             setSelectedVesselMmsi(tappedMmsi);
           }
         }
-        
       } catch (error) {
         console.warn('Unable to resolve GNSS selection', error);
         setSelectedGnss(null);
@@ -413,7 +432,7 @@ const Map = () => {
   const handleSearchChange = (text: string) => {
     setSearchQuery(text);
     const trimmed = text.trim();
-    if(!trimmed) {
+    if (!trimmed) {
       setSearchResults([]);
       setSearchResultsVisible(false);
       return;
@@ -470,7 +489,7 @@ const Map = () => {
       zoomLevel: 10,
       animationDuration: 800,
     });
-  }
+  };
 
   // Handle vessel filter button press
   const handleVesselFilterPress = () => {
@@ -483,25 +502,24 @@ const Map = () => {
     setIsShipEnabled(prev => !prev);
   };
 
-  // Handle port button press
-  const handlePortPress = () => {
-    // TODO: Implement port functionality
-    // - Toggle port visibility on map
-    // - Show port information (name, type, facilities)
-    // - Display port markers with icons
-    // - Filter ports by type (cargo, passenger, fishing, etc.)
-    // - Show distance to nearest port
-    console.log('Port button pressed');
+  // Handle north button press
+  const handleNorthPress = () => {
+    console.log('North button pressed');
+    cameraRef.current?.setCamera({
+      heading: 0,
+      animationDuration: 1000,
+    });
   };
 
-  // Handle map layer button press
-  const handleMapLayerPress = () => {
+  // Handle map reset button press
+  const handleMapResetPress = () => {
     // TODO: Implement map layer switching functionality
     // - Show layer options: Standard, Satellite, Hybrid, Nautical Chart
     // - Allow user to toggle between different map styles
     // - Save selected layer preference
     // - Update map view with selected layer
-    console.log('Map layer button pressed');
+    console.log('Map reset button pressed');
+    resetCamera();
   };
 
   // Handle GNSS toggle button press
@@ -524,12 +542,18 @@ const Map = () => {
         style={styles.map}
         mapStyle={mapStyle}
         onPress={handleMapPress}
-        attributionEnabled={false}
+        attributionEnabled={true}
+        attributionPosition={{ bottom: 8, left: 8 }}
         compassEnabled={false}
         onRegionWillChange={handleRegionWillChange}
         onRegionDidChange={handleRegionDidChange}
       >
-        <Camera ref={cameraRef} defaultSettings={cameraInitStop} followUserLocation={isFollowingUser} />
+        <GnssLayer gnssEnabled={isGnssEnabled} />
+        <Camera
+          ref={cameraRef}
+          defaultSettings={cameraInitStop}
+          followUserLocation={isFollowingUser}
+        />
         {hasLocationPermission && <UserLocation renderMode="native" androidRenderMode="compass" />}
       </MapView>
 
@@ -559,30 +583,32 @@ const Map = () => {
         </TouchableOpacity>
 
         {/* Port Button */}
-        <TouchableOpacity style={styles.portButton} onPress={handlePortPress} activeOpacity={0.8}>
-          <Image source={portIcon} style={styles.portIcon} resizeMode="contain" />
+        <TouchableOpacity style={styles.portButton} onPress={handleNorthPress} activeOpacity={0.8}>
+          <Image source={northIcon} style={styles.portIcon} resizeMode="contain" />
         </TouchableOpacity>
       </View>
 
-      {searchResultsVisible && searchResults.length > 0 && <View style={styles.searchResultsContainer}>
-        {searchResults.map(v => (
-          <TouchableOpacity
-            key={v.mmsi}
-            style={styles.searchResultItem}
-            onPress={() => handleSelectVessel(v)}
-          >
-            <Text style={styles.searchResultTitle}>{getVesselName(v.mmsi) || v.mmsi}</Text>
-            <Text style={styles.searchResultSubtitle}>
-              MMSI {v.mmsi} · {typeof v.sog === 'number' ? `${v.sog} kts` : 'Speed N/A'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>}
+      {searchResultsVisible && searchResults.length > 0 && (
+        <View style={styles.searchResultsContainer}>
+          {searchResults.map(v => (
+            <TouchableOpacity
+              key={v.mmsi}
+              style={styles.searchResultItem}
+              onPress={() => handleSelectVessel(v)}
+            >
+              <Text style={styles.searchResultTitle}>{getVesselName(v.mmsi) || v.mmsi}</Text>
+              <Text style={styles.searchResultSubtitle}>
+                MMSI {v.mmsi} · {typeof v.sog === 'number' ? `${v.sog} kts` : 'Speed N/A'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {/* Map Layer Button */}
       <TouchableOpacity
-        style={styles.mapLayerButton}
-        onPress={handleMapLayerPress}
+        style={styles.mapResetButton}
+        onPress={handleMapResetPress}
         activeOpacity={0.8}
       >
         <Image source={mapLayerIcon} style={styles.mapLayerIcon} resizeMode="contain" />
@@ -610,8 +636,6 @@ const Map = () => {
           <Image source={navigationIcon} style={styles.navigationIcon} resizeMode="contain" />
         )}
       </TouchableOpacity>
-
-      <Button title="Reset Camera" onPress={resetCamera} />
 
       {/* Location Permission Modal */}
       <LocationPermissionModal
@@ -801,7 +825,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
   },
-  mapLayerButton: {
+  mapResetButton: {
     position: 'absolute',
     top: 128,
     right: 16,
@@ -843,7 +867,7 @@ const styles = StyleSheet.create({
   },
   navigationButton: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 20,
     right: 20,
     width: 48,
     height: 48,

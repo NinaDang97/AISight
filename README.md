@@ -57,7 +57,13 @@ cd android
 .\gradlew --status
 ```
 - If you are running this on a laptop and your avd is not starting, it may be due to screen size being too small. I switched display scaling from 125% too 100% and emulator started succesfully.
-- Good ol' `git reset --hard` to get your repo to same state it's on remote
+
+- You can clear Metro cache by running
+``` sh
+npm start -- --reset-cache
+```
+
+- If changing environments becomes a problem (doing changes in `.env` files), try uninstalling the app manually from the device and then reinstalling. Also try cleaning any caches before reinstallation. 
 
 
 This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
