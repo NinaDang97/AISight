@@ -11,7 +11,17 @@
     "ios:prod": "ENVFILE=.env.production react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:screens": "jest __tests__/screens",
+    "test:splash": "jest __tests__/screens/SplashScreen.test.tsx",
+    "test:welcome": "jest __tests__/screens/WelcomeScreen.test.tsx",
+    "test:services": "jest __tests__/services",
+    "test:contexts": "jest __tests__/contexts",
+    "test:components": "jest __tests__/components",
+    "test:update": "jest --updateSnapshot",
+    "test:ci": "jest --coverage --maxWorkers=2"
   },
   "dependencies": {
     "@maplibre/maplibre-gl-style-spec": "^24.2.0",
