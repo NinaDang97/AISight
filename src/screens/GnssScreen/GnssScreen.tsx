@@ -109,10 +109,7 @@ export const GnssScreen: React.FC = () => {
       await stopLogging();
     } else {
       if (!isTracking) {
-        Alert.alert(
-          'Start Tracking First',
-          'Please start GNSS tracking before logging',
-        );
+        Alert.alert('Start Tracking First', 'Please start GNSS tracking before logging');
         return;
       }
 
@@ -146,8 +143,9 @@ export const GnssScreen: React.FC = () => {
     if (signals.length === 0) return 'Unknown';
     const validSignals = signals.filter(s => s.dbValue > 0);
     if (validSignals.length === 0) return 'Unknown';
-    
-    const avgStrength = validSignals.reduce((sum, signal) => sum + signal.dbValue, 0) / validSignals.length;
+
+    const avgStrength =
+      validSignals.reduce((sum, signal) => sum + signal.dbValue, 0) / validSignals.length;
     if (avgStrength >= 40) return 'Excellent';
     if (avgStrength >= 35) return 'Good';
     if (avgStrength >= 30) return 'Fair';
@@ -156,45 +154,46 @@ export const GnssScreen: React.FC = () => {
 
   const getConstellationDisplayId = (svid: number, constellation: string): string => {
     const prefixMap: { [key: string]: string } = {
-      'GPS': 'G',
-      'GLONASS': 'R', 
-      'GALILEO': 'E',
-      'BEIDOU': 'C',
-      'QZSS': 'J',
-      'SBAS': 'S'
+      GPS: 'G',
+      GLONASS: 'R',
+      GALILEO: 'E',
+      BEIDOU: 'C',
+      QZSS: 'J',
+      SBAS: 'S',
     };
-    
+
     const prefix = prefixMap[constellation] || 'X';
     return `${prefix}${svid.toString().padStart(2, '0')}`;
   };
 
   // Convert GnssMeasurement data to display format
   const updateSatelliteDisplays = (gnssMeasurements: any[]) => {
-    const signals: SatelliteSignal[] = [];
+    const map = new Map<string, SatelliteSignal>();
 
-    // Filter and sort measurements by signal strength
     const validMeasurements = gnssMeasurements
       .filter(m => m.cn0DbHz !== undefined && m.cn0DbHz > 0)
       .sort((a, b) => (b.cn0DbHz || 0) - (a.cn0DbHz || 0));
 
-    validMeasurements.forEach((measurement) => {
-      const dbValue = measurement.cn0DbHz || 0;
-      const constellation = measurement.constellation || 'UNKNOWN';
-      const svid = measurement.svid || 0;
-      
+    validMeasurements.forEach(m => {
+      const dbValue = m.cn0DbHz ?? 0;
+      const constellation = m.constellation ?? 'UNKNOWN';
+      const svid = m.svid ?? 0;
       const displayId = getConstellationDisplayId(svid, constellation);
-      const uniqueId = `${constellation}-${svid}`;
+      const key = `${constellation}-${svid}`;
 
-      // Create signal entry
-      signals.push({
-        id: uniqueId,
-        displayId,
-        system: constellation,
-        strength: `${dbValue.toFixed(1)} dB-Hz`,
-        dbValue,
-      });
+      const existing = map.get(key);
+      if (!existing || dbValue > existing.dbValue) {
+        map.set(key, {
+          id: key,
+          displayId,
+          system: constellation,
+          strength: `${dbValue.toFixed(1)} dB-Hz`,
+          dbValue,
+        });
+      }
     });
 
+    const signals = Array.from(map.values()).sort((a, b) => b.dbValue - a.dbValue);
     setSatelliteSignals(signals);
     setSignalQuality(getSignalQuality(signals));
   };
@@ -216,8 +215,8 @@ export const GnssScreen: React.FC = () => {
         {/* Header - Centered with icon */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
-            <Image 
-              source={require('../../../assets/images/icons/gnss-icon.png')} 
+            <Image
+              source={require('../../../assets/images/icons/gnss-icon.png')}
               style={styles.headerIcon}
             />
             <View style={styles.headerTextContainer}>
@@ -272,8 +271,8 @@ export const GnssScreen: React.FC = () => {
         {/* Logging Status */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Image 
-              source={require('../../../assets/images/icons/antenna-icon.png')} 
+            <Image
+              source={require('../../../assets/images/icons/antenna-icon.png')}
               style={styles.sectionIcon}
             />
             <Text style={styles.sectionTitle}>Logging Status</Text>
@@ -306,50 +305,49 @@ export const GnssScreen: React.FC = () => {
         {/* Position Info */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Image 
-              source={require('../../../assets/images/icons/black-location-icon.png')} 
+            <Image
+              source={require('../../../assets/images/icons/black-location-icon.png')}
               style={styles.sectionIcon}
             />
             <Text style={styles.sectionTitle}>Position Information</Text>
           </View>
           <View style={styles.card}>
             {!isTracking ? (
-              <Text style={styles.noDataText}>
-                Start tracking to see position data
-              </Text>
+              <Text style={styles.noDataText}>Start tracking to see position data</Text>
             ) : !location ? (
-              <Text style={styles.noDataText}>
-                Waiting for GPS fix...
-              </Text>
+              <Text style={styles.noDataText}>Waiting for GPS fix...</Text>
             ) : (
               <View>
                 <View style={styles.dataRow}>
                   <Text style={styles.dataLabel}>Latitude:</Text>
-                  <Text style={styles.dataValue}>
-                    {location.latitude.toFixed(6)}°
-                  </Text>
+                  <Text style={styles.dataValue}>{location.latitude.toFixed(6)}°</Text>
                 </View>
                 <View style={styles.dataRow}>
                   <Text style={styles.dataLabel}>Longitude:</Text>
-                  <Text style={styles.dataValue}>
-                    {location.longitude.toFixed(6)}°
-                  </Text>
+                  <Text style={styles.dataValue}>{location.longitude.toFixed(6)}°</Text>
                 </View>
                 {location.altitude && (
                   <View style={styles.dataRow}>
                     <Text style={styles.dataLabel}>Altitude:</Text>
-                    <Text style={styles.dataValue}>
-                      {location.altitude.toFixed(1)}m
-                    </Text>
+                    <Text style={styles.dataValue}>{location.altitude.toFixed(1)}m</Text>
                   </View>
                 )}
                 {location.accuracy && (
                   <View style={styles.dataRow}>
                     <Text style={styles.dataLabel}>Accuracy:</Text>
-                    <Text style={[styles.dataValue, { 
-                      color: location.accuracy < 10 ? colors.success : 
-                            location.accuracy < 50 ? colors.warning : colors.error 
-                    }]}>
+                    <Text
+                      style={[
+                        styles.dataValue,
+                        {
+                          color:
+                            location.accuracy < 10
+                              ? colors.success
+                              : location.accuracy < 50
+                                ? colors.warning
+                                : colors.error,
+                        },
+                      ]}
+                    >
                       ±{location.accuracy.toFixed(1)}m
                     </Text>
                   </View>
@@ -357,17 +355,13 @@ export const GnssScreen: React.FC = () => {
                 {location.speed !== undefined && location.speed > 0 && (
                   <View style={styles.dataRow}>
                     <Text style={styles.dataLabel}>Speed:</Text>
-                    <Text style={styles.dataValue}>
-                      {location.speed.toFixed(1)} m/s
-                    </Text>
+                    <Text style={styles.dataValue}>{location.speed.toFixed(1)} m/s</Text>
                   </View>
                 )}
                 {location.bearing !== undefined && (
                   <View style={styles.dataRow}>
                     <Text style={styles.dataLabel}>Bearing:</Text>
-                    <Text style={styles.dataValue}>
-                      {location.bearing.toFixed(0)}°
-                    </Text>
+                    <Text style={styles.dataValue}>{location.bearing.toFixed(0)}°</Text>
                   </View>
                 )}
                 <View style={styles.dataRow}>
@@ -384,23 +378,20 @@ export const GnssScreen: React.FC = () => {
         {/* GNSS Signal Overview */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Image 
-              source={require('../../../assets/images/icons/bar-graph-icon.png')} 
+            <Image
+              source={require('../../../assets/images/icons/bar-graph-icon.png')}
               style={styles.sectionIcon}
             />
             <Text style={styles.sectionTitle}>
-              GNSS Signal Overview {satelliteSignals.length > 0 && `(${satelliteSignals.length} satellites)`}
+              GNSS Signal Overview{' '}
+              {satelliteSignals.length > 0 && `(${satelliteSignals.length} satellites)`}
             </Text>
           </View>
           <View style={styles.card}>
             {!isTracking ? (
-              <Text style={styles.noDataText}>
-                Start tracking to see signal data
-              </Text>
+              <Text style={styles.noDataText}>Start tracking to see signal data</Text>
             ) : satelliteSignals.length === 0 ? (
-              <Text style={styles.noDataText}>
-                Waiting for satellite measurements...
-              </Text>
+              <Text style={styles.noDataText}>Waiting for satellite measurements...</Text>
             ) : (
               <View>
                 {/* Overview Row */}
@@ -408,10 +399,9 @@ export const GnssScreen: React.FC = () => {
                   <View style={styles.overviewItem}>
                     <Text style={styles.overviewLabel}>Avg Signal</Text>
                     <Text style={styles.overviewValue}>
-                      {satelliteSignals.length > 0 
+                      {satelliteSignals.length > 0
                         ? `${(satelliteSignals.reduce((sum, s) => sum + s.dbValue, 0) / satelliteSignals.length).toFixed(1)} dB-Hz`
-                        : 'N/A'
-                      }
+                        : 'N/A'}
                     </Text>
                   </View>
                   <View style={styles.overviewItem}>
@@ -420,10 +410,15 @@ export const GnssScreen: React.FC = () => {
                   </View>
                   <View style={styles.overviewItem}>
                     <Text style={styles.overviewLabel}>Used in Fix</Text>
-                    <Text style={[
-                      styles.overviewValue,
-                      { color: status && status.satellitesUsed >= 4 ? colors.success : colors.warning }
-                    ]}>
+                    <Text
+                      style={[
+                        styles.overviewValue,
+                        {
+                          color:
+                            status && status.satellitesUsed >= 4 ? colors.success : colors.warning,
+                        },
+                      ]}
+                    >
                       {status?.satellitesUsed || 'N/A'}
                     </Text>
                   </View>
@@ -458,18 +453,21 @@ export const GnssScreen: React.FC = () => {
                       <Text style={styles.satelliteId}>{satellite.displayId}</Text>
                       <Text style={styles.satelliteSystem}>{satellite.system}</Text>
                       <View style={styles.signalBarContainer}>
-                        <View 
+                        <View
                           style={[
                             styles.signalBar,
-                            { 
+                            {
                               width: `${Math.min(100, (satellite.dbValue / 50) * 100)}%`,
-                              backgroundColor: getSignalColor(satellite.dbValue)
-                            }
-                          ]} 
+                              backgroundColor: getSignalColor(satellite.dbValue),
+                            },
+                          ]}
                         />
                       </View>
                       <Text
-                        style={[styles.signalStrength, { color: getSignalColor(satellite.dbValue) }]}
+                        style={[
+                          styles.signalStrength,
+                          { color: getSignalColor(satellite.dbValue) },
+                        ]}
                       >
                         {satellite.strength}
                       </Text>
@@ -495,14 +493,14 @@ export const GnssScreen: React.FC = () => {
         {/* Export Data */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Image 
-              source={require('../../../assets/images/icons/database-download-icon.png')} 
+            <Image
+              source={require('../../../assets/images/icons/database-download-icon.png')}
               style={styles.sectionIcon}
             />
             <Text style={styles.sectionTitle}>Export & File Management</Text>
           </View>
           <View style={styles.card}>
-            <GnssExportManager/>
+            <GnssExportManager />
           </View>
         </View>
       </ScrollView>
