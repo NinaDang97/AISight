@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { renderHook, act, waitFor } from '@testing-library/react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { AnomalyProvider, useAnomaly } from '../../src/components/contexts/AnomalyContext';
 import { GnssProvider, useGnss } from '../../src/components/contexts/GnssContext';
 import { GnssLocation, GnssMeasurement } from '../../src/native/GnssModule';
@@ -67,6 +67,16 @@ jest.mock('../../src/services/anomaly/AnomalyStorage', () => ({
 // Mock AnomalyDetector
 jest.mock('../../src/services/anomaly/AnomalyDetector');
 
+// Mock Notifee
+jest.mock('@notifee/react-native', () => ({
+  createChannel: jest.fn(() => Promise.resolve('test-channel')),
+  displayNotification: jest.fn(() => Promise.resolve()),
+  cancelAllNotifications: jest.fn(() => Promise.resolve()),
+  AndroidImportance: {
+    HIGH: 4,
+  },
+}));
+
 describe('AnomalyContext', () => {
   let mockDetectorInstance: any;
 
@@ -111,9 +121,7 @@ describe('AnomalyContext', () => {
     });
 
     it('should return context value when used inside provider', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -126,9 +134,7 @@ describe('AnomalyContext', () => {
 
   describe('initialization', () => {
     it('should start with detection disabled', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -137,9 +143,7 @@ describe('AnomalyContext', () => {
     });
 
     it('should start with no active anomaly', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -147,12 +151,10 @@ describe('AnomalyContext', () => {
     });
 
     it('should load persisted anomalies on mount', async () => {
-      const mockAnomalies = [createMockAnomalyEvent('JAMMING')];
+      const mockAnomalies = [createMockAnomalyEvent('Both C/N0 and AGC dropped')];
       (AnomalyStorage.loadAnomalies as jest.Mock).mockResolvedValue(mockAnomalies);
 
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -160,16 +162,15 @@ describe('AnomalyContext', () => {
         expect(result.current.detectedAnomalies).toHaveLength(1);
       });
 
-      expect(result.current.detectedAnomalies[0].type).toBe('JAMMING');
+      expect(result.current.detectedAnomalies[0].type).toBe('ANOMALY');
+      expect(result.current.detectedAnomalies[0].reason).toBe('Both C/N0 and AGC dropped');
     });
 
     it('should handle loading errors gracefully', async () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
       (AnomalyStorage.loadAnomalies as jest.Mock).mockRejectedValue(new Error('Load failed'));
 
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -184,9 +185,7 @@ describe('AnomalyContext', () => {
 
   describe('startDetection', () => {
     it('should enable detection when GNSS is tracking', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -198,9 +197,7 @@ describe('AnomalyContext', () => {
     });
 
     it('should reset detector when starting', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -212,9 +209,7 @@ describe('AnomalyContext', () => {
     });
 
     it('should set detectorReady to false on start', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -228,9 +223,7 @@ describe('AnomalyContext', () => {
 
   describe('stopDetection', () => {
     it('should disable detection', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -246,9 +239,7 @@ describe('AnomalyContext', () => {
     });
 
     it('should complete active anomaly when stopped', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -260,14 +251,15 @@ describe('AnomalyContext', () => {
       // Simulate active anomaly by having detector return anomaly result
       mockDetectorInstance.addEpoch.mockReturnValue({
         isAnomaly: true,
-        type: 'JAMMING',
+        type: 'ANOMALY',
+        reason: 'Both C/N0 and AGC dropped',
         severity: 'High',
         metrics: {
           cn0Drop: 15.0,
           baselineCn0: 42.0,
           avgCn0: 35.0,
         },
-        description: 'JAMMING detected',
+        description: 'Possible anomaly detected: Both C/N0 and AGC dropped',
       });
 
       act(() => {
@@ -281,14 +273,12 @@ describe('AnomalyContext', () => {
   describe('clearAnomalies', () => {
     it('should clear all detected anomalies', async () => {
       const mockAnomalies = [
-        createMockAnomalyEvent('JAMMING'),
-        createMockAnomalyEvent('SPOOFING'),
+        createMockAnomalyEvent('Both C/N0 and AGC dropped'),
+        createMockAnomalyEvent('C/N0 dropped but AGC increased'),
       ];
       (AnomalyStorage.loadAnomalies as jest.Mock).mockResolvedValue(mockAnomalies);
 
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -305,9 +295,7 @@ describe('AnomalyContext', () => {
     });
 
     it('should clear active anomaly', async () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -323,9 +311,7 @@ describe('AnomalyContext', () => {
     it('should update detectorReady when detector becomes ready', () => {
       mockDetectorInstance.isReady.mockReturnValue(true);
 
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -339,9 +325,7 @@ describe('AnomalyContext', () => {
 
   describe('anomaly persistence', () => {
     it('should save anomalies when they are added', async () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       renderHook(() => useAnomaly(), { wrapper });
 
@@ -354,19 +338,17 @@ describe('AnomalyContext', () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
       (AnomalyStorage.saveAnomalies as jest.Mock).mockRejectedValue(new Error('Save failed'));
 
-      const mockAnomalies = [createMockAnomalyEvent('JAMMING')];
+      const mockAnomalies = [createMockAnomalyEvent('Both C/N0 and AGC dropped')];
       (AnomalyStorage.loadAnomalies as jest.Mock).mockResolvedValue(mockAnomalies);
 
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       renderHook(() => useAnomaly(), { wrapper });
 
       await waitFor(() => {
         expect(consoleErrorSpy).toHaveBeenCalledWith(
           expect.stringContaining('[AnomalyContext] Error saving anomalies:'),
-          expect.any(Error)
+          expect.any(Error),
         );
       });
 
@@ -376,9 +358,7 @@ describe('AnomalyContext', () => {
 
   describe('context value', () => {
     it('should provide all required properties', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -398,9 +378,7 @@ describe('AnomalyContext', () => {
     });
 
     it('should provide functions that can be called', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -411,9 +389,7 @@ describe('AnomalyContext', () => {
     });
 
     it('should initialize calibration progress to 0', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -429,9 +405,7 @@ describe('AnomalyContext', () => {
       mockDetectorInstance.getCalibrationProgress.mockReturnValue(50);
       mockDetectorInstance.getRemainingEpochs.mockReturnValue(30);
 
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -444,9 +418,7 @@ describe('AnomalyContext', () => {
     });
 
     it('should reset calibration progress when starting detection', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -463,9 +435,7 @@ describe('AnomalyContext', () => {
 
   describe('recalibration', () => {
     it('should call detector recalibrate when recalibrating', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -482,9 +452,7 @@ describe('AnomalyContext', () => {
 
     it('should not recalibrate if detection is not active', () => {
       const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -494,16 +462,14 @@ describe('AnomalyContext', () => {
 
       expect(mockDetectorInstance.recalibrate).not.toHaveBeenCalled();
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        '[AnomalyContext] Cannot recalibrate: Detection not active'
+        '[AnomalyContext] Cannot recalibrate: Detection not active',
       );
 
       consoleWarnSpy.mockRestore();
     });
 
     it('should reset calibration progress on recalibrate', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -524,9 +490,7 @@ describe('AnomalyContext', () => {
     it('should mark detector as not ready after recalibrate', () => {
       mockDetectorInstance.isReady.mockReturnValue(true);
 
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -544,9 +508,7 @@ describe('AnomalyContext', () => {
     });
 
     it('should complete active anomaly when recalibrating', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -557,14 +519,15 @@ describe('AnomalyContext', () => {
       // Simulate active anomaly
       mockDetectorInstance.addEpoch.mockReturnValue({
         isAnomaly: true,
-        type: 'JAMMING',
+        type: 'ANOMALY',
+        reason: 'Both C/N0 and AGC dropped',
         severity: 'High',
         metrics: {
           cn0Drop: 15.0,
           baselineCn0: 42.0,
           avgCn0: 35.0,
         },
-        description: 'JAMMING detected',
+        description: 'Possible anomaly detected: Both C/N0 and AGC dropped',
       });
 
       act(() => {
@@ -576,9 +539,7 @@ describe('AnomalyContext', () => {
     });
 
     it('should add completed anomaly to detected anomalies list', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -589,14 +550,15 @@ describe('AnomalyContext', () => {
       // Simulate active anomaly
       mockDetectorInstance.addEpoch.mockReturnValue({
         isAnomaly: true,
-        type: 'JAMMING',
+        type: 'ANOMALY',
+        reason: 'Both C/N0 and AGC dropped',
         severity: 'High',
         metrics: {
           cn0Drop: 15.0,
           baselineCn0: 42.0,
           avgCn0: 35.0,
         },
-        description: 'JAMMING detected',
+        description: 'Possible anomaly detected: Both C/N0 and AGC dropped',
       });
 
       const initialAnomalyCount = result.current.detectedAnomalies.length;
@@ -612,9 +574,7 @@ describe('AnomalyContext', () => {
 
   describe('edge cases', () => {
     it('should handle missing location gracefully', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -627,9 +587,7 @@ describe('AnomalyContext', () => {
     });
 
     it('should handle empty measurements array', () => {
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -644,9 +602,7 @@ describe('AnomalyContext', () => {
     it('should handle detector returning null result', () => {
       mockDetectorInstance.addEpoch.mockReturnValue(null);
 
-      const wrapper = ({ children }: any) => (
-        <AnomalyProvider>{children}</AnomalyProvider>
-      );
+      const wrapper = ({ children }: any) => <AnomalyProvider>{children}</AnomalyProvider>;
 
       const { result } = renderHook(() => useAnomaly(), { wrapper });
 
@@ -662,7 +618,10 @@ describe('AnomalyContext', () => {
 // Helper functions
 
 function createMockAnomalyEvent(
-  type: 'JAMMING' | 'SPOOFING' | 'SIGNAL_DEGRADATION'
+  reason:
+    | 'Both C/N0 and AGC dropped'
+    | 'C/N0 dropped but AGC increased'
+    | 'C/N0 dropped but AGC stable/unavailable',
 ) {
   const now = Date.now();
   const location: GnssLocation = {
@@ -674,7 +633,8 @@ function createMockAnomalyEvent(
 
   return {
     id: `anomaly_${now}_test`,
-    type,
+    type: 'ANOMALY',
+    reason,
     severity: 'High',
     status: 'completed',
     startTime: now - 30000,
@@ -690,6 +650,6 @@ function createMockAnomalyEvent(
       baselineAgc: -8.0,
       avgAgc: -10.2,
     },
-    description: `${type} detected with High severity`,
+    description: `Possible anomaly detected: ${reason}`,
   };
 }

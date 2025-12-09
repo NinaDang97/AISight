@@ -31,8 +31,8 @@
  * ```
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { GnssEpoch, GnssAnomalyEvent } from '../../native/GnssModule';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { GnssAnomalyEvent, GnssEpoch } from '../../native/GnssModule';
 import { useGnss } from './GnssContext';
 import {
   AnomalyDetector,
@@ -40,6 +40,7 @@ import {
   createEpoch,
   generateAnomalyId,
 } from '../../services/anomaly';
+import { anomalyNotificationService } from '../../services/notifications/AnomalyNotificationService';
 
 type BaselineStats = {
   avgCn0: number;
@@ -243,6 +244,7 @@ export const AnomalyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const newAnomaly: GnssAnomalyEvent = {
           id: generateAnomalyId(),
           type: result.type!,
+          reason: result.reason!,
           severity: result.severity!,
           status: 'Active',
           startTime: Date.now(),
@@ -252,6 +254,11 @@ export const AnomalyProvider: React.FC<{ children: React.ReactNode }> = ({ child
           description: result.description!,
         };
         setActiveAnomaly(newAnomaly);
+
+        // Send notification for new anomaly
+        anomalyNotificationService.sendAnomalyNotification(newAnomaly).catch(error => {
+          console.error('[AnomalyContext] Error sending notification:', error);
+        });
       } else {
         // Update existing anomaly
         const prev = activeAnomalyRef.current;
@@ -261,9 +268,11 @@ export const AnomalyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (gnss.location) {
           const lastLocation = updatedPath[updatedPath.length - 1];
           // Only add if location changed (avoid duplicates)
-          if (!lastLocation ||
-              lastLocation.latitude !== gnss.location.latitude ||
-              lastLocation.longitude !== gnss.location.longitude) {
+          if (
+            !lastLocation ||
+            lastLocation.latitude !== gnss.location.latitude ||
+            lastLocation.longitude !== gnss.location.longitude
+          ) {
             updatedPath.push(gnss.location);
           }
         }
@@ -298,18 +307,19 @@ export const AnomalyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [gnss.isTracking, isDetecting, stopDetection]);
 
   /**
-   * Load persisted anomalies on mount
+   * Initialize notification service on mount and load persisted anomalies
    */
   useEffect(() => {
-    const loadAnomalies = async () => {
+    const initialize = async () => {
       try {
+        await anomalyNotificationService.initialize();
         const stored = await AnomalyStorage.loadAnomalies();
         setDetectedAnomalies(stored);
       } catch (error) {
-        console.error('[AnomalyContext] Error loading anomalies:', error);
+        console.error('[AnomalyContext] Error during initialization:', error);
       }
     };
-    loadAnomalies();
+    initialize();
   }, []);
 
   /**

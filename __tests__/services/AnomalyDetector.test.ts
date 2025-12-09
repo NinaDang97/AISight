@@ -58,15 +58,15 @@ describe('AnomalyDetector', () => {
     });
   });
 
-  describe('jamming detection', () => {
-    it('should detect jamming when both C/N0 and AGC drop significantly', () => {
+  describe('anomaly detection with both C/N0 and AGC drop', () => {
+    it('should detect anomaly when both C/N0 and AGC drop significantly', () => {
       // Fill baseline with good signals (epochs 0-49)
       for (let i = 0; i < 50; i++) {
         detector.addEpoch(createMockEpoch(42.0, -8.0));
       }
 
       // Add recent epochs with degraded signals (epochs 50-59)
-      // For jamming: both C/N0 and AGC should drop (AGC becomes less negative/weaker)
+      // Both C/N0 and AGC should drop (AGC becomes less negative/weaker)
       for (let i = 0; i < 10; i++) {
         detector.addEpoch(createMockEpoch(35.0, -6.0)); // C/N0: ~16% drop, AGC: 25% drop (weaker)
       }
@@ -75,7 +75,8 @@ describe('AnomalyDetector', () => {
 
       expect(result).not.toBeNull();
       expect(result?.isAnomaly).toBe(true);
-      expect(result?.type).toBe('JAMMING');
+      expect(result?.type).toBe('ANOMALY');
+      expect(result?.reason).toBe('Both C/N0 and AGC dropped');
       expect(result?.severity).toBe('High');
     });
 
@@ -100,8 +101,8 @@ describe('AnomalyDetector', () => {
     });
   });
 
-  describe('spoofing detection', () => {
-    it('should detect spoofing when C/N0 drops but AGC increases', () => {
+  describe('anomaly detection with C/N0 drop and AGC increase', () => {
+    it('should detect anomaly when C/N0 drops but AGC increases', () => {
       // Baseline
       for (let i = 0; i < 50; i++) {
         detector.addEpoch(createMockEpoch(42.0, -8.0));
@@ -115,12 +116,13 @@ describe('AnomalyDetector', () => {
       const result = detector.addEpoch(createMockEpoch(35.0, -12.0));
 
       expect(result).not.toBeNull();
-      expect(result?.type).toBe('SPOOFING');
+      expect(result?.type).toBe('ANOMALY');
+      expect(result?.reason).toBe('C/N0 dropped but AGC increased');
     });
   });
 
-  describe('signal degradation detection', () => {
-    it('should detect degradation when only C/N0 drops (no AGC data)', () => {
+  describe('anomaly detection with C/N0 drop only', () => {
+    it('should detect anomaly when only C/N0 drops (no AGC data)', () => {
       // Baseline without AGC
       for (let i = 0; i < 50; i++) {
         detector.addEpoch(createMockEpoch(42.0, undefined));
@@ -134,10 +136,11 @@ describe('AnomalyDetector', () => {
       const result = detector.addEpoch(createMockEpoch(36.0, undefined));
 
       expect(result).not.toBeNull();
-      expect(result?.type).toBe('SIGNAL_DEGRADATION');
+      expect(result?.type).toBe('ANOMALY');
+      expect(result?.reason).toBe('C/N0 dropped but AGC stable/unavailable');
     });
 
-    it('should detect degradation when C/N0 drops but AGC stable', () => {
+    it('should detect anomaly when C/N0 drops but AGC stable', () => {
       // Baseline
       for (let i = 0; i < 50; i++) {
         detector.addEpoch(createMockEpoch(42.0, -8.0));
@@ -151,7 +154,8 @@ describe('AnomalyDetector', () => {
       const result = detector.addEpoch(createMockEpoch(36.0, -8.0));
 
       expect(result).not.toBeNull();
-      expect(result?.type).toBe('SIGNAL_DEGRADATION');
+      expect(result?.type).toBe('ANOMALY');
+      expect(result?.reason).toBe('C/N0 dropped but AGC stable/unavailable');
     });
   });
 
@@ -267,7 +271,8 @@ describe('AnomalyDetector', () => {
       const result = detector.addEpoch(createMockEpoch(36.0, undefined));
 
       // Should still detect based on C/N0, but no AGC classification
-      expect(result?.type).toBe('SIGNAL_DEGRADATION');
+      expect(result?.type).toBe('ANOMALY');
+      expect(result?.reason).toBe('C/N0 dropped but AGC stable/unavailable');
       expect(result?.metrics.agcDrop).toBeUndefined();
     });
   });
