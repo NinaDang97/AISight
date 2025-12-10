@@ -65,8 +65,30 @@ npm start -- --reset-cache
 
 - If changing environments becomes a problem (doing changes in `.env` files), try uninstalling the app manually from the device and then reinstalling. Also try cleaning any caches before reinstallation. 
 
+# Building for production
+
+Following should work at least on Windows with elevated Powershell
+
+``` sh
+# Clean gradle cache
+cd android
+./gradlew clean
+
+# Run metro and clean its cache
+npm start -- --reset-cache
+
+# !! Remove the application from the connected device
+
+# Build the app for production
+npm run android -- --mode="release"
+
+```
+
+
 
 This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+
+
 
 # Getting Started
 
