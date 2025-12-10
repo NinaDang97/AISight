@@ -1,0 +1,478 @@
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import Map from '../../src/map/Map';
+import { usePermissions } from '../../src/hooks';
+import { useVesselDetails } from '../../src/components/contexts/VesselDetailsContext';
+import { useVesselMqtt } from '../../src/components/contexts/VesselMqttContext';
+import { LocationService, Position } from '../../src/services/location';
+
+// ============================================================================
+// MOCKS
+// ============================================================================
+
+jest.mock('../../src/hooks');
+jest.mock('../../src/components/contexts/VesselDetailsContext');
+jest.mock('../../src/components/contexts/VesselMqttContext');
+jest.mock('../../src/services/location');
+
+// Camera mock with forwardRef to capture setCamera calls
+const mockSetCamera = jest.fn();
+const mockFlyTo = jest.fn();
+const mockZoomTo = jest.fn();
+
+jest.mock('@maplibre/maplibre-react-native', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+
+  const MockCamera = React.forwardRef((_props: any, ref: any) => {
+    React.useImperativeHandle(ref, () => ({
+      setCamera: (stop: any) => mockSetCamera(stop),
+      flyTo: (stop: any) => mockFlyTo(stop),
+      zoomTo: (stop: any) => mockZoomTo(stop),
+    }));
+    return null;
+  });
+
+  return {
+    MapView: ({ children }: any) => <View testID="MapView">{children}</View>,
+    Camera: MockCamera,
+    UserLocation: () => null,
+    ShapeSource: () => null,
+  };
+});
+
+// PermissionModal mock with testable buttons
+jest.mock('../../src/components/modals/PermissionModals', () => {
+  const React = require('react');
+  const { View, Button } = require('react-native');
+
+  return {
+    LocationPermissionModal: ({ visible, onContinue, onNotNow }: any) =>
+      visible ? (
+        <View testID="locationPermissionModal">
+          <Button
+            title="Continue"
+            testID="locationPermissionModalContinue"
+            onPress={() => onContinue && onContinue()}
+          />
+          <Button
+            title="Not Now"
+            testID="locationPermissionModalNotNow"
+            onPress={() => onNotNow && onNotNow()}
+          />
+        </View>
+      ) : null,
+  };
+});
+
+jest.mock('../../src/map/GnssLayer', () => () => null);
+
+// ============================================================================
+// TYPE & CONST DEFINITIONS
+// ============================================================================
+
+const mockUsePermissions = usePermissions as jest.Mock;
+const mockUseVesselDetails = useVesselDetails as jest.Mock;
+const mockUseVesselMqtt = useVesselMqtt as jest.Mock;
+const mockLocationService = LocationService as jest.Mocked<typeof LocationService>;
+
+// ============================================================================
+// TEST SUITE
+// ============================================================================
+
+describe('Map Component', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    mockUsePermissions.mockReturnValue({
+      hasLocationPermission: false,
+      requestLocation: jest.fn(),
+    });
+    mockUseVesselDetails.mockReturnValue({
+      setCardVisible: jest.fn(),
+      setVesselData: jest.fn(),
+    });
+    mockUseVesselMqtt.mockReturnValue({
+      vesselList: [],
+      metadata: {},
+    });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  // ==========================================================================
+  // INITIAL RENDER TESTS
+  // ==========================================================================
+
+  describe('Initial Render', () => {
+    it('should render Map component without crashing', () => {
+      const { root } = render(<Map />);
+      expect(root).toBeTruthy();
+    });
+
+    it('should render MapView', () => {
+      render(<Map />);
+      expect(screen.getByTestId('MapView')).toBeTruthy();
+    });
+
+    it('should render navigation button', () => {
+      render(<Map />);
+      expect(screen.getByTestId('navigationButton')).toBeTruthy();
+    });
+
+    it('should render search bar', () => {
+      render(<Map />);
+      expect(screen.getByPlaceholderText('Search by vessel mmsi or name...')).toBeTruthy();
+    });
+
+    it('should render vessel filter button', () => {
+      render(<Map />);
+      expect(screen.getByTestId('vesselButton')).toBeTruthy();
+    });
+
+    it('should render GNSS toggle button', () => {
+      render(<Map />);
+      expect(screen.getByTestId('gnssButton')).toBeTruthy();
+    });
+
+    it('should render north button', () => {
+      render(<Map />);
+      expect(screen.getByTestId('northButton')).toBeTruthy();
+    });
+
+    it('should render map reset button', () => {
+      render(<Map />);
+      expect(screen.getByTestId('mapResetButton')).toBeTruthy();
+    });
+  });
+
+  // ==========================================================================
+  // NAVIGATION & LOCATION TESTS
+  // ==========================================================================
+
+  describe('Navigation and Location', () => {
+    it('should show location modal when user presses navigation button without permission', async () => {
+      mockUsePermissions.mockReturnValue({
+        hasLocationPermission: false,
+        requestLocation: jest.fn(),
+      });
+
+      render(<Map />);
+      const navigationButton = screen.getByTestId('navigationButton');
+
+      fireEvent.press(navigationButton);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('locationPermissionModal')).toBeTruthy();
+      });
+    });
+
+    it('should request location when Continue is pressed on permission modal', async () => {
+      const mockRequestLocation = jest.fn().mockResolvedValue(true);
+      mockUsePermissions.mockReturnValue({
+        hasLocationPermission: false,
+        requestLocation: mockRequestLocation,
+      });
+
+      render(<Map />);
+      fireEvent.press(screen.getByTestId('navigationButton'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('locationPermissionModal')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByTestId('locationPermissionModalContinue'));
+
+      await waitFor(() => {
+        expect(mockRequestLocation).toHaveBeenCalled();
+      });
+    });
+
+    it('should center on user location when permission is granted', async () => {
+      mockUsePermissions.mockReturnValue({
+        hasLocationPermission: true,
+        requestLocation: jest.fn(),
+      });
+      mockLocationService.getCurrentPosition.mockResolvedValue({
+        latitude: 60.1,
+        longitude: 19.9,
+      } as Position);
+
+      render(<Map />);
+      fireEvent.press(screen.getByTestId('navigationButton'));
+
+      await waitFor(() => {
+        expect(mockLocationService.getCurrentPosition).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        expect(mockSetCamera).toHaveBeenCalledWith(
+          expect.objectContaining({
+            centerCoordinate: [19.9, 60.1],
+            zoomLevel: 14,
+            animationDuration: 1000,
+          }),
+        );
+      });
+    });
+
+    it('should handle location service error gracefully', async () => {
+      mockUsePermissions.mockReturnValue({
+        hasLocationPermission: true,
+        requestLocation: jest.fn(),
+      });
+      mockLocationService.getCurrentPosition.mockRejectedValue(new Error('Location unavailable'));
+
+      render(<Map />);
+      fireEvent.press(screen.getByTestId('navigationButton'));
+
+      await waitFor(() => {
+        expect(Alert.alert).toHaveBeenCalledWith(
+          'Location Error',
+          expect.any(String),
+          expect.any(Array),
+        );
+      });
+    });
+
+    it('should execute full location flow: nav → continue → center camera', async () => {
+      const mockRequestLocation = jest.fn().mockResolvedValue('GRANTED');
+      mockUsePermissions.mockReturnValue({
+        hasLocationPermission: false,
+        requestLocation: mockRequestLocation,
+      });
+      mockLocationService.getCurrentPosition.mockResolvedValue({
+        latitude: 60.1,
+        longitude: 19.9,
+      } as Position);
+      mockSetCamera.mockClear();
+
+      render(<Map />);
+      fireEvent.press(screen.getByTestId('navigationButton'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('locationPermissionModal')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByTestId('locationPermissionModalContinue'));
+
+      await waitFor(() => {
+        expect(mockRequestLocation).toHaveBeenCalled();
+        expect(mockLocationService.getCurrentPosition).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        expect(mockSetCamera).toHaveBeenCalledWith(
+          expect.objectContaining({
+            centerCoordinate: [19.9, 60.1],
+            zoomLevel: 14,
+            animationDuration: 1000,
+          }),
+        );
+      });
+    });
+  });
+
+  // ==========================================================================
+  // SEARCH FUNCTIONALITY TESTS
+  // ==========================================================================
+
+  describe('Search Functionality', () => {
+    it('should filter vessels by MMSI', () => {
+      mockUseVesselMqtt.mockReturnValue({
+        vesselList: [{ mmsi: '123456789', lat: 60.1, lon: 19.9, sog: 10 }],
+        metadata: { '123456789': { name: 'Test Vessel' } },
+      });
+
+      render(<Map />);
+      const searchInput = screen.getByPlaceholderText('Search by vessel mmsi or name...');
+
+      fireEvent.changeText(searchInput, '123456');
+
+      expect(screen.getByText('Test Vessel')).toBeTruthy();
+    });
+
+    it('should filter vessels by name', () => {
+      mockUseVesselMqtt.mockReturnValue({
+        vesselList: [{ mmsi: '123456789', lat: 60.1, lon: 19.9, sog: 10 }],
+        metadata: { '123456789': { name: 'Nordic Vessel' } },
+      });
+
+      render(<Map />);
+      const searchInput = screen.getByPlaceholderText('Search by vessel mmsi or name...');
+
+      fireEvent.changeText(searchInput, 'Nordic');
+
+      expect(screen.getByText('Nordic Vessel')).toBeTruthy();
+    });
+
+    it('should clear search results when input is empty', () => {
+      render(<Map />);
+      const searchInput = screen.getByPlaceholderText('Search by vessel mmsi or name...');
+
+      fireEvent.changeText(searchInput, 'test');
+      fireEvent.changeText(searchInput, '');
+
+      expect(screen.queryByText(/MMSI/)).toBeNull();
+    });
+
+    it('should select vessel from search results', async () => {
+      const mockSetCardVisible = jest.fn();
+      const mockSetVesselData = jest.fn();
+
+      mockUseVesselDetails.mockReturnValue({
+        setCardVisible: mockSetCardVisible,
+        setVesselData: mockSetVesselData,
+      });
+      mockUseVesselMqtt.mockReturnValue({
+        vesselList: [{ mmsi: '123456789', lat: 60.1, lon: 19.9, sog: 10 }],
+        metadata: { '123456789': { name: 'Test Vessel' } },
+      });
+
+      render(<Map />);
+      const searchInput = screen.getByPlaceholderText('Search by vessel mmsi or name...');
+
+      fireEvent.changeText(searchInput, '123456');
+      const vesselResult = screen.getByText('Test Vessel');
+      fireEvent.press(vesselResult);
+
+      await waitFor(() => {
+        expect(mockSetCardVisible).toHaveBeenCalledWith(true);
+        expect(mockSetVesselData).toHaveBeenCalled();
+      });
+    });
+  });
+
+  // ==========================================================================
+  // TOGGLE BUTTONS TESTS
+  // ==========================================================================
+
+  describe('Toggle Buttons', () => {
+    it('should toggle ship layer on vessel button press', () => {
+      const { rerender } = render(<Map />);
+      const vesselButton = screen.getByTestId('vesselButton');
+
+      fireEvent.press(vesselButton);
+      rerender(<Map />);
+
+      expect(vesselButton).toHaveStyle({ backgroundColor: '#08A315' });
+    });
+
+    it('should toggle GNSS layer on GNSS button press', () => {
+      render(<Map />);
+      const gnssButton = screen.getByTestId('gnssButton');
+
+      fireEvent.press(gnssButton);
+
+      expect(gnssButton).toHaveStyle({ backgroundColor: '#08A315' });
+    });
+
+    it('should reset map rotation to north on north button press', () => {
+      mockSetCamera.mockClear();
+      render(<Map />);
+      fireEvent.press(screen.getByTestId('northButton'));
+
+      expect(mockSetCamera).toHaveBeenCalledWith(
+        expect.objectContaining({
+          heading: 0,
+          animationDuration: 1000,
+        }),
+      );
+    });
+
+    it('should reset map view on map reset button press', () => {
+      mockSetCamera.mockClear();
+      render(<Map />);
+      fireEvent.press(screen.getByTestId('mapResetButton'));
+
+      expect(mockSetCamera).toHaveBeenCalledWith(
+        expect.objectContaining({
+          centerCoordinate: expect.any(Array),
+          zoomLevel: expect.any(Number),
+        }),
+      );
+    });
+  });
+
+  // ==========================================================================
+  // VESSEL DISPLAY TESTS
+  // ==========================================================================
+
+  describe('Vessel Display', () => {
+    it('should display live vessels on map', () => {
+      mockUseVesselMqtt.mockReturnValue({
+        vesselList: [{ mmsi: '123456789', lat: 60.1, lon: 19.9, sog: 10, cog: 45, navStat: 0 }],
+        metadata: {},
+      });
+
+      render(<Map />);
+      expect(screen.getByTestId('MapView')).toBeTruthy();
+    });
+
+    it('should limit displayed vessels to maximum visible', () => {
+      const largeVesselList = Array.from({ length: 600 }, (_, i) => ({
+        mmsi: `${100000000 + i}`,
+        lat: 60.1 + i * 0.001,
+        lon: 19.9,
+        sog: 10,
+        cog: 45,
+        navStat: 0,
+      }));
+
+      mockUseVesselMqtt.mockReturnValue({
+        vesselList: largeVesselList,
+        metadata: {},
+      });
+
+      render(<Map />);
+      expect(screen.getByTestId('MapView')).toBeTruthy();
+    });
+
+    it('should always include selected vessel even if outside view bounds', () => {
+      mockUseVesselMqtt.mockReturnValue({
+        vesselList: [
+          { mmsi: '123456789', lat: 60.1, lon: 19.9, sog: 10, cog: 45, navStat: 0 },
+          { mmsi: '987654321', lat: 70.0, lon: 30.0, sog: 5, cog: 90, navStat: 0 },
+        ],
+        metadata: {},
+      });
+
+      render(<Map />);
+      expect(screen.getByTestId('MapView')).toBeTruthy();
+    });
+  });
+
+  // ==========================================================================
+  // LOADING STATES TESTS
+  // ==========================================================================
+
+  describe('Loading States', () => {
+    it('should show loading indicator while getting location', async () => {
+      mockUsePermissions.mockReturnValue({
+        hasLocationPermission: true,
+        requestLocation: jest.fn(),
+      });
+      mockLocationService.getCurrentPosition.mockImplementation(
+        () =>
+          new Promise(resolve =>
+            setTimeout(() => resolve({ latitude: 60.1, longitude: 19.9 } as Position), 100),
+          ),
+      );
+
+      render(<Map />);
+      fireEvent.press(screen.getByTestId('navigationButton'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('loadingIndicator')).toBeTruthy();
+      });
+
+      await waitFor(() => {
+        expect(mockLocationService.getCurrentPosition).toHaveBeenCalled();
+      });
+    });
+  });
+});

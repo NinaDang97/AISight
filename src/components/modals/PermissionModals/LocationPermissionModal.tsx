@@ -1,13 +1,5 @@
 import React from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Platform,
-  Image,
-} from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, Platform, Image } from 'react-native';
 
 const locationIcon = {
   location: require('../../../../assets/images/icons/location-icon.png'),
@@ -19,24 +11,24 @@ interface LocationPermissionModalProps {
   onNotNow: () => void;
 }
 
-export const LocationPermissionModal: React.FC<
-  LocationPermissionModalProps
-> = ({visible, onContinue, onNotNow}) => {
+export const LocationPermissionModal: React.FC<LocationPermissionModalProps> = ({
+  visible,
+  onContinue,
+  onNotNow,
+}) => {
   return (
     <Modal
+      testID="locationPermissionModal"
       visible={visible}
       transparent
       animationType="fade"
-      statusBarTranslucent>
+      statusBarTranslucent
+    >
       <View style={styles.overlay}>
         <View style={styles.container}>
           {/* Icon */}
           <View style={styles.iconContainer}>
-            <Image
-              source={locationIcon.location}
-              style={styles.icon}
-              resizeMode="contain"
-            />
+            <Image source={locationIcon.location} style={styles.icon} resizeMode="contain" />
           </View>
 
           {/* Title */}
@@ -52,17 +44,11 @@ export const LocationPermissionModal: React.FC<
           </View>
 
           {/* Buttons */}
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={onContinue}
-            activeOpacity={0.8}>
+          <TouchableOpacity style={styles.primaryButton} onPress={onContinue} activeOpacity={0.8}>
             <Text style={styles.primaryButtonText}>Continue</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={onNotNow}
-            activeOpacity={0.8}>
+          <TouchableOpacity style={styles.secondaryButton} onPress={onNotNow} activeOpacity={0.8}>
             <Text style={styles.secondaryButtonText}>Not now</Text>
           </TouchableOpacity>
         </View>
@@ -90,7 +76,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: {width: 0, height: 10},
+        shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.3,
         shadowRadius: 20,
       },
