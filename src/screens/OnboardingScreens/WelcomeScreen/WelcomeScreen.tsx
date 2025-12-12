@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaWrapper } from '../../../components/common/SafeAreaWrapper';
 import { Button } from '../../../components/common/Button';
 import { colors, typography, spacing } from '../../../styles';
@@ -27,7 +27,11 @@ export const WelcomeScreen: React.FC = () => {
 
   return (
     <SafeAreaWrapper barStyle="light-content" backgroundColor={colors.primary}>
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.logoContainer}>
           <Text style={styles.logoText}>AISight</Text>
           <Text style={styles.tagline}>Marine Traffic Tracker</Text>
@@ -60,7 +64,7 @@ export const WelcomeScreen: React.FC = () => {
             style={styles.button}
           />
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaWrapper>
   );
 };
@@ -85,6 +89,9 @@ const FeatureItem: React.FC<FeatureItemProps> = ({ title, description }) => (
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     padding: spacing.large,
   },
   logoContainer: {
@@ -104,6 +111,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
     justifyContent: 'center',
+    marginVertical: spacing.large,
   },
   title: {
     ...typography.heading2,
@@ -149,6 +157,7 @@ const styles = StyleSheet.create({
   },
   footerContainer: {
     marginBottom: spacing.large,
+    marginTop: spacing.large,
   },
   button: {
     backgroundColor: colors.secondary,
