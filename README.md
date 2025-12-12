@@ -82,6 +82,8 @@ npm start -- --reset-cache
 # Build the app for production
 npm run android -- --mode="release"
 
+# The build apk should appear in folder android\app\build\outputs\apk\release
+
 ```
 
 
