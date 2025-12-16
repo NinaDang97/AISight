@@ -538,6 +538,7 @@ const Map = () => {
     <View style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
       <MapView
+        testID="mapView"
         ref={mapRef}
         style={styles.map}
         mapStyle={mapStyle}
@@ -575,6 +576,7 @@ const Map = () => {
 
         {/* Vessel Filter Button */}
         <TouchableOpacity
+          testID="vesselButton"
           style={[styles.vesselButton, isShipEnabled && styles.buttonActive]}
           onPress={handleVesselFilterPress}
           activeOpacity={0.8}
@@ -582,8 +584,13 @@ const Map = () => {
           <Image source={vesselIcon} style={styles.vesselIcon} resizeMode="contain" />
         </TouchableOpacity>
 
-        {/* Port Button */}
-        <TouchableOpacity style={styles.portButton} onPress={handleNorthPress} activeOpacity={0.8}>
+        {/* North Button */}
+        <TouchableOpacity
+          testID="northButton"
+          style={styles.portButton}
+          onPress={handleNorthPress}
+          activeOpacity={0.8}
+        >
           <Image source={northIcon} style={styles.portIcon} resizeMode="contain" />
         </TouchableOpacity>
       </View>
@@ -607,6 +614,7 @@ const Map = () => {
 
       {/* Map Layer Button */}
       <TouchableOpacity
+        testID="mapResetButton"
         style={styles.mapResetButton}
         onPress={handleMapResetPress}
         activeOpacity={0.8}
@@ -616,6 +624,7 @@ const Map = () => {
 
       {/* GNSS Toggle Button */}
       <TouchableOpacity
+        testID="gnssButton"
         style={[styles.gnssButton, isGnssEnabled && styles.buttonActive]}
         onPress={handleGnssToggle}
         activeOpacity={0.8}
@@ -625,13 +634,14 @@ const Map = () => {
 
       {/* Navigation Button */}
       <TouchableOpacity
+        testID="navigationButton"
         style={styles.navigationButton}
         onPress={handleNavigationPress}
         activeOpacity={0.8}
         disabled={isLoadingLocation}
       >
         {isLoadingLocation ? (
-          <ActivityIndicator size="small" color="#5856D6" />
+          <ActivityIndicator testID="loadingIndicator" size="small" color="#5856D6" />
         ) : (
           <Image source={navigationIcon} style={styles.navigationIcon} resizeMode="contain" />
         )}
