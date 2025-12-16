@@ -21,7 +21,7 @@ export const ReportScreen = () => {
     // Set initial last update time
     const now = new Date();
     setLastUpdate('12:30'); // Hardcoded for now
-    
+
     // Randomly set GNSS status for demo
     const statuses: ('Strong' | 'Medium' | 'Weak')[] = ['Strong', 'Medium', 'Weak'];
     setGnssStatus(statuses[Math.floor(Math.random() * statuses.length)]);
@@ -30,10 +30,14 @@ export const ReportScreen = () => {
   // Get GNSS status color based on strength
   const getGnssStatusColor = () => {
     switch (gnssStatus) {
-      case 'Strong': return colors.success; // Green
-      case 'Medium': return colors.warning; // Orange/Yellow
-      case 'Weak': return colors.error;     // Red
-      default: return colors.success;
+      case 'Strong':
+        return colors.success; // Green
+      case 'Medium':
+        return colors.warning; // Orange/Yellow
+      case 'Weak':
+        return colors.error; // Red
+      default:
+        return colors.success;
     }
   };
 
@@ -44,7 +48,7 @@ export const ReportScreen = () => {
       Alert.alert(
         'PDF Report Generated',
         'Comprehensive report has been saved to:\n\n/Documents/AISightReports/',
-        [{ text: 'OK' }]
+        [{ text: 'OK' }],
       );
     }, 2000);
   };
@@ -53,24 +57,18 @@ export const ReportScreen = () => {
     setIsExportingCSV(true);
     setTimeout(() => {
       setIsExportingCSV(false);
-      Alert.alert(
-        'CSV Data Exported',
-        'Vessel and anomaly data has been exported.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('CSV Data Exported', 'Vessel and anomaly data has been exported.', [
+        { text: 'OK' },
+      ]);
     }, 1500);
   };
 
   const shareReports = () => {
-    Alert.alert(
-      'Share Reports',
-      'Select sharing method for exported reports.',
-      [
-        { text: 'Email', style: 'default' },
-        { text: 'Cloud Storage', style: 'default' },
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
+    Alert.alert('Share Reports', 'Select sharing method for exported reports.', [
+      { text: 'Email', style: 'default' },
+      { text: 'Cloud Storage', style: 'default' },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   // Summary cards data
@@ -109,8 +107,16 @@ export const ReportScreen = () => {
     <SafeAreaWrapper backgroundColor={colors.background} barStyle="dark-content">
       <ScrollView style={styles.container}>
         {/* Header */}
+        {
+          // TODO: Remove this when Report screen is fully implemented
+          Alert.alert(
+            'Warning: Component not fully implemented',
+            'Report screen is currently not fully implemented and serves as a placeholder for future features.',
+            [{ text: 'OK' }],
+          )
+        }
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Reports</Text>
+          <Text style={styles.headerTitle}>Reports (MOCK)</Text>
           <Text style={styles.headerSubtitle}>Data Summary & Export Hub</Text>
         </View>
 
@@ -119,13 +125,7 @@ export const ReportScreen = () => {
           <Text style={styles.sectionTitle}>Summary Overview</Text>
           <View style={styles.summaryGrid}>
             {summaryCards.map((card, index) => (
-              <View 
-                key={index}
-                style={[
-                  styles.summaryCard,
-                  { borderLeftColor: card.borderColor }
-                ]}
-              >
+              <View key={index} style={[styles.summaryCard, { borderLeftColor: card.borderColor }]}>
                 <View style={styles.cardHeader}>
                   <Image source={card.icon} style={styles.cardIcon} />
                   <Text style={styles.summaryCardTitle}>{card.title}</Text>
@@ -143,15 +143,14 @@ export const ReportScreen = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Export & Share</Text>
           <View style={styles.exportCard}>
-            
             {/* Export Report (PDF) Section */}
             <View style={styles.exportSection}>
               <Text style={styles.exportSectionTitle}>Export Report (PDF)</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.exportButton,
                   styles.primaryButton,
-                  isGeneratingPDF && styles.disabledButton
+                  isGeneratingPDF && styles.disabledButton,
                 ]}
                 onPress={generatePDFReport}
                 disabled={isGeneratingPDF}
@@ -164,11 +163,11 @@ export const ReportScreen = () => {
 
             {/* CSV Data and Share buttons */}
             <View style={styles.buttonRow}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.halfButton,
                   styles.secondaryButton,
-                  isExportingCSV && styles.disabledButton
+                  isExportingCSV && styles.disabledButton,
                 ]}
                 onPress={exportCSVData}
                 disabled={isExportingCSV}
@@ -178,14 +177,13 @@ export const ReportScreen = () => {
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.halfButton, styles.shareButton]}
                 onPress={shareReports}
               >
                 <Text style={styles.shareButtonText}>Share</Text>
               </TouchableOpacity>
             </View>
-
           </View>
         </View>
 
@@ -197,7 +195,6 @@ export const ReportScreen = () => {
             </Text>
           </View>
         </View>
-
       </ScrollView>
     </SafeAreaWrapper>
   );
