@@ -202,7 +202,7 @@ export const SettingsScreen = () => {
           <Text style={[typography.heading5, styles.sectionTitle]}>About</Text>
           <View style={styles.item}>
             <Text style={typography.body}>Version</Text>
-            <Text style={typography.body}>1.0.0</Text>
+            <Text style={typography.body}>0.0.2</Text>
           </View>
           <Pressable onPress={showMapCopyrights}>
             <View style={styles.item}>
