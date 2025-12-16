@@ -202,7 +202,7 @@ export const SettingsScreen = () => {
           <Text style={[typography.heading5, styles.sectionTitle]}>About</Text>
           <View style={styles.item}>
             <Text style={typography.body}>Version</Text>
-            <Text style={typography.body}>1.0.0</Text>
+            <Text style={typography.body}>0.0.2</Text>
           </View>
           <Pressable onPress={showMapCopyrights}>
             <View style={styles.item}>
@@ -216,6 +216,7 @@ export const SettingsScreen = () => {
               <Text style={typography.body}>{'>'}</Text>
             </View>
           </Pressable>
+          {/* 
           <Button
             title="Clear Cache"
             variant="outline"
@@ -225,6 +226,7 @@ export const SettingsScreen = () => {
             style={{ borderColor: colors.error, marginTop: spacing.large }}
             textStyle={{ color: colors.error }}
           />
+          TODO: Remove comments when implementing offline maps etc. */}
         </ScrollView>
       )}
     </SafeAreaWrapper>

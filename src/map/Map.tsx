@@ -15,6 +15,7 @@ import {
 
 import {
   Camera,
+  CameraModes,
   CameraRef,
   CameraStop,
   MapView,
@@ -47,6 +48,7 @@ import { logger } from '../utils/logger';
 import { useVesselDetails } from '../components/contexts/VesselDetailsContext';
 import GnssLayer from './GnssLayer';
 import { useVesselMqtt } from '../components/contexts/VesselMqttContext';
+import { useGnss } from '../components/contexts';
 
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
@@ -74,6 +76,9 @@ type LiveVessel = ReturnType<typeof useVesselMqtt>['vesselList'][number];
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
   zoomLevel: 8,
+  heading: 0,
+  animationMode: 'easeTo',
+  animationDuration: 500,
 };
 
 const defaultCameraCenter = cameraInitStop.centerCoordinate as GeoJSONPosition;
@@ -107,6 +112,7 @@ const Map = () => {
   const [searchResults, setSearchResults] = useState<LiveVessel[]>([]);
 
   const { hasLocationPermission, requestLocation } = usePermissions();
+  const { isTracking } = useGnss();
   const { setCardVisible, setVesselData } = useVesselDetails();
   const { vesselList, metadata } = useVesselMqtt();
   const shouldUseLiveFeed = vesselList.length > 0;
@@ -274,6 +280,10 @@ const Map = () => {
       if (feature.properties?.isUserInteraction) {
         setIsFollowingUser(false);
       }
+
+      // This fixes issue where camera would just stick when set with setCamera and not move after user interaction
+      // No idea why it works but it does
+      cameraRef.current?.setCamera({});
     },
     [],
   );
@@ -530,6 +540,13 @@ const Map = () => {
     // - Display GNSS signal strength indicators
     // - Show positioning accuracy
     // - Save GNSS toggle state preference
+    if (!isGnssEnabled && !isTracking) {
+      Alert.alert(
+        'GNSS Tracking not enabled',
+        'To record GNSS track on the map enable GNSS Tracking on the GNSS screen.',
+        [{ text: 'OK' }],
+      );
+    }
     console.log('GNSS toggled:', !isGnssEnabled);
     setIsGnssEnabled(prev => !prev);
   };
