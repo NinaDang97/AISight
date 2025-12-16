@@ -283,7 +283,7 @@ const Map = () => {
 
       // This fixes issue where camera would just stick when set with setCamera and not move after user interaction
       // No idea why it works but it does
-      cameraRef.current?.setCamera({ animationMode: undefined });
+      cameraRef.current?.setCamera({});
     },
     [],
   );
