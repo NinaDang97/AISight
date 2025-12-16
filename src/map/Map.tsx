@@ -47,6 +47,7 @@ import { logger } from '../utils/logger';
 import { useVesselDetails } from '../components/contexts/VesselDetailsContext';
 import GnssLayer from './GnssLayer';
 import { useVesselMqtt } from '../components/contexts/VesselMqttContext';
+import { useGnss } from '../components/contexts';
 
 const navigationIcon = require('../../assets/images/icons/navigation-icon.png');
 const searchIcon = require('../../assets/images/icons/search-icon.png');
@@ -107,6 +108,7 @@ const Map = () => {
   const [searchResults, setSearchResults] = useState<LiveVessel[]>([]);
 
   const { hasLocationPermission, requestLocation } = usePermissions();
+  const { isTracking } = useGnss();
   const { setCardVisible, setVesselData } = useVesselDetails();
   const { vesselList, metadata } = useVesselMqtt();
   const shouldUseLiveFeed = vesselList.length > 0;
@@ -530,6 +532,13 @@ const Map = () => {
     // - Display GNSS signal strength indicators
     // - Show positioning accuracy
     // - Save GNSS toggle state preference
+    if (!isGnssEnabled && !isTracking) {
+      Alert.alert(
+        'GNSS Tracking not enabled',
+        'To record GNSS track on the map enable GNSS Tracking on the GNSS screen.',
+        [{ text: 'OK' }],
+      );
+    }
     console.log('GNSS toggled:', !isGnssEnabled);
     setIsGnssEnabled(prev => !prev);
   };
