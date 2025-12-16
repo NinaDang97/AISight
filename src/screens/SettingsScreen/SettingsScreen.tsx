@@ -216,6 +216,7 @@ export const SettingsScreen = () => {
               <Text style={typography.body}>{'>'}</Text>
             </View>
           </Pressable>
+          {/* 
           <Button
             title="Clear Cache"
             variant="outline"
@@ -225,6 +226,7 @@ export const SettingsScreen = () => {
             style={{ borderColor: colors.error, marginTop: spacing.large }}
             textStyle={{ color: colors.error }}
           />
+          TODO: Remove comments when implementing offline maps etc. */}
         </ScrollView>
       )}
     </SafeAreaWrapper>
