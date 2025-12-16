@@ -15,6 +15,7 @@ import {
 
 import {
   Camera,
+  CameraModes,
   CameraRef,
   CameraStop,
   MapView,
@@ -75,6 +76,9 @@ type LiveVessel = ReturnType<typeof useVesselMqtt>['vesselList'][number];
 const cameraInitStop: CameraStop = {
   centerCoordinate: [19.93481, 60.09726],
   zoomLevel: 8,
+  heading: 0,
+  animationMode: 'easeTo',
+  animationDuration: 500,
 };
 
 const defaultCameraCenter = cameraInitStop.centerCoordinate as GeoJSONPosition;
@@ -276,6 +280,10 @@ const Map = () => {
       if (feature.properties?.isUserInteraction) {
         setIsFollowingUser(false);
       }
+
+      // This fixes issue where camera would just stick when set with setCamera and not move after user interaction
+      // No idea why it works but it does
+      cameraRef.current?.setCamera({ animationMode: undefined });
     },
     [],
   );
