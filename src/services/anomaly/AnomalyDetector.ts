@@ -5,7 +5,11 @@ import { GnssEpoch } from '../../native/GnssModule';
  */
 export type AnomalyDetectionResult = {
   isAnomaly: boolean;
-  type?: 'JAMMING' | 'SPOOFING' | 'SIGNAL_DEGRADATION';
+  type?: 'ANOMALY';
+  reason?:
+    | 'Both C/N0 and AGC dropped'
+    | 'C/N0 dropped but AGC increased'
+    | 'C/N0 dropped but AGC stable/unavailable';
   severity?: 'High' | 'Medium' | 'Low';
   metrics: {
     cn0Drop: number;
@@ -40,14 +44,14 @@ export class AnomalyDetector {
   private anomalyInProgress = false;
 
   // Configuration
-  private readonly RECENT_WINDOW = 10;    // Most recent epochs to analyze
-  private readonly BASELINE_WINDOW = 50;  // Historical baseline epochs
-  private readonly TOTAL_REQUIRED = 60;   // Total epochs needed (10 + 50)
+  private readonly RECENT_WINDOW = 10; // Most recent epochs to analyze
+  private readonly BASELINE_WINDOW = 50; // Historical baseline epochs
+  private readonly TOTAL_REQUIRED = 60; // Total epochs needed (10 + 50)
 
   // Thresholds for anomaly detection
-  private readonly THRESHOLD_HIGH = 15;    // 15% drop = High severity
-  private readonly THRESHOLD_MEDIUM = 10;  // 10% drop = Medium severity
-  private readonly THRESHOLD_LOW = 7;      // 7% drop = Low severity
+  private readonly THRESHOLD_HIGH = 15; // 15% drop = High severity
+  private readonly THRESHOLD_MEDIUM = 10; // 10% drop = Medium severity
+  private readonly THRESHOLD_LOW = 7; // 7% drop = Low severity
 
   /**
    * Add a new epoch and perform anomaly detection
@@ -81,17 +85,14 @@ export class AnomalyDetector {
     const recentEpochs = this.epochBuffer.slice(-this.RECENT_WINDOW);
 
     // Use frozen baseline if anomaly is in progress, otherwise use current baseline
-    const baselineEpochs = this.anomalyInProgress && this.frozenBaseline
-      ? this.frozenBaseline
-      : this.epochBuffer.slice(0, this.BASELINE_WINDOW);
+    const baselineEpochs =
+      this.anomalyInProgress && this.frozenBaseline
+        ? this.frozenBaseline
+        : this.epochBuffer.slice(0, this.BASELINE_WINDOW);
 
     // Calculate C/N0 averages
-    const recentAvgCn0 = this.calculateAverage(
-      recentEpochs.map(e => e.avgCn0DbHz)
-    );
-    const baselineAvgCn0 = this.calculateAverage(
-      baselineEpochs.map(e => e.avgCn0DbHz)
-    );
+    const recentAvgCn0 = this.calculateAverage(recentEpochs.map(e => e.avgCn0DbHz));
+    const baselineAvgCn0 = this.calculateAverage(baselineEpochs.map(e => e.avgCn0DbHz));
 
     // Calculate C/N0 drop percentage
     const cn0Drop = ((baselineAvgCn0 - recentAvgCn0) / baselineAvgCn0) * 100;
@@ -105,14 +106,12 @@ export class AnomalyDetector {
     const baselineWithAgc = baselineEpochs.filter(e => e.avgAgcLevelDb !== undefined);
 
     // Only calculate AGC if we have enough data points (at least 50% of epochs)
-    if (recentWithAgc.length >= this.RECENT_WINDOW / 2 &&
-        baselineWithAgc.length >= this.BASELINE_WINDOW / 2) {
-      recentAvgAgc = this.calculateAverage(
-        recentWithAgc.map(e => e.avgAgcLevelDb!)
-      );
-      baselineAvgAgc = this.calculateAverage(
-        baselineWithAgc.map(e => e.avgAgcLevelDb!)
-      );
+    if (
+      recentWithAgc.length >= this.RECENT_WINDOW / 2 &&
+      baselineWithAgc.length >= this.BASELINE_WINDOW / 2
+    ) {
+      recentAvgAgc = this.calculateAverage(recentWithAgc.map(e => e.avgAgcLevelDb!));
+      baselineAvgAgc = this.calculateAverage(baselineWithAgc.map(e => e.avgAgcLevelDb!));
       agcDrop = ((baselineAvgAgc - recentAvgAgc) / baselineAvgAgc) * 100;
     }
 
@@ -155,8 +154,8 @@ export class AnomalyDetector {
    */
   private classifyAnomaly(
     cn0Drop: number,
-    agcDrop?: number
-  ): Pick<AnomalyDetectionResult, 'isAnomaly' | 'type' | 'severity' | 'description'> {
+    agcDrop?: number,
+  ): Pick<AnomalyDetectionResult, 'isAnomaly' | 'type' | 'reason' | 'severity' | 'description'> {
     // No anomaly if C/N0 hasn't dropped significantly
     if (cn0Drop < this.THRESHOLD_LOW) {
       return { isAnomaly: false };
@@ -172,27 +171,31 @@ export class AnomalyDetector {
       severity = 'Low';
     }
 
-    // Classify anomaly type based on AGC behavior
-    let type: 'JAMMING' | 'SPOOFING' | 'SIGNAL_DEGRADATION';
+    // Determine reason based on AGC behavior
+    let reason:
+      | 'Both C/N0 and AGC dropped'
+      | 'C/N0 dropped but AGC increased'
+      | 'C/N0 dropped but AGC stable/unavailable';
     let description: string;
 
     if (agcDrop !== undefined && agcDrop >= this.THRESHOLD_LOW) {
-      // Both C/N0 and AGC dropped = likely jamming
-      type = 'JAMMING';
-      description = `Potential GNSS jamming detected. C/N0 dropped ${cn0Drop.toFixed(1)}% and AGC dropped ${agcDrop.toFixed(1)}% compared to baseline.`;
+      // Both C/N0 and AGC dropped
+      reason = 'Both C/N0 and AGC dropped';
+      description = `Possible anomaly detected: Both C/N0 and AGC dropped (C/N0: ${cn0Drop.toFixed(1)}%, AGC: ${agcDrop.toFixed(1)}%)`;
     } else if (agcDrop !== undefined && agcDrop < -this.THRESHOLD_LOW) {
-      // C/N0 dropped but AGC increased = possible spoofing
-      type = 'SPOOFING';
-      description = `Potential GNSS spoofing detected. C/N0 dropped ${cn0Drop.toFixed(1)}% while AGC increased ${Math.abs(agcDrop).toFixed(1)}%.`;
+      // C/N0 dropped but AGC increased
+      reason = 'C/N0 dropped but AGC increased';
+      description = `Possible anomaly detected: C/N0 dropped ${cn0Drop.toFixed(1)}% but AGC increased ${Math.abs(agcDrop).toFixed(1)}%`;
     } else {
-      // C/N0 dropped but AGC stable/unavailable = general degradation
-      type = 'SIGNAL_DEGRADATION';
-      description = `GNSS signal degradation detected. C/N0 dropped ${cn0Drop.toFixed(1)}% compared to baseline.`;
+      // C/N0 dropped but AGC stable/unavailable
+      reason = 'C/N0 dropped but AGC stable/unavailable';
+      description = `Possible anomaly detected: C/N0 dropped ${cn0Drop.toFixed(1)}%`;
     }
 
     return {
       isAnomaly: true,
-      type,
+      type: 'ANOMALY',
+      reason,
       severity,
       description,
     };
@@ -276,9 +279,10 @@ export class AnomalyDetector {
 
     // Calculate AGC average if available
     const epochsWithAgc = baselineEpochs.filter(e => e.avgAgcLevelDb !== undefined);
-    const avgAgc = epochsWithAgc.length >= this.BASELINE_WINDOW / 2
-      ? this.calculateAverage(epochsWithAgc.map(e => e.avgAgcLevelDb!))
-      : undefined;
+    const avgAgc =
+      epochsWithAgc.length >= this.BASELINE_WINDOW / 2
+        ? this.calculateAverage(epochsWithAgc.map(e => e.avgAgcLevelDb!))
+        : undefined;
 
     return {
       avgCn0,

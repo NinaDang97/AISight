@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import { AnomalyScreen } from '../../src/screens/AnomalyScreen/AnomalyScreen';
 import { useAnomaly } from '../../src/components/contexts/AnomalyContext';
@@ -36,6 +36,16 @@ jest.mock('react-native-permissions', () => ({
 // Mock the contexts
 jest.mock('../../src/components/contexts/AnomalyContext');
 jest.mock('../../src/components/contexts/GnssContext');
+
+// Mock Notifee
+jest.mock('@notifee/react-native', () => ({
+  createChannel: jest.fn(() => Promise.resolve('test-channel')),
+  displayNotification: jest.fn(() => Promise.resolve()),
+  cancelAllNotifications: jest.fn(() => Promise.resolve()),
+  AndroidImportance: {
+    HIGH: 4,
+  },
+}));
 
 // Mock Alert
 jest.spyOn(Alert, 'alert');
@@ -159,7 +169,7 @@ describe('AnomalyScreen', () => {
     it('should show active anomaly count', () => {
       (useAnomaly as jest.Mock).mockReturnValue({
         isDetecting: true,
-        activeAnomaly: createMockAnomaly('JAMMING', 'Active'),
+        activeAnomaly: createMockAnomaly('Both C/N0 and AGC dropped', 'Active'),
         detectedAnomalies: [],
         currentEpoch: null,
         detectorReady: true,
@@ -179,8 +189,8 @@ describe('AnomalyScreen', () => {
         isDetecting: false,
         activeAnomaly: null,
         detectedAnomalies: [
-          createMockAnomaly('JAMMING', 'Completed'),
-          createMockAnomaly('SPOOFING', 'Completed'),
+          createMockAnomaly('Both C/N0 and AGC dropped', 'Completed'),
+          createMockAnomaly('C/N0 dropped but AGC increased', 'Completed'),
         ],
         currentEpoch: null,
         detectorReady: false,
@@ -206,10 +216,10 @@ describe('AnomalyScreen', () => {
     });
 
     it('should filter anomalies by severity when High is selected', () => {
-      const highAnomaly = createMockAnomaly('JAMMING', 'Completed');
+      const highAnomaly = createMockAnomaly('Both C/N0 and AGC dropped', 'Completed');
       highAnomaly.severity = 'High';
 
-      const mediumAnomaly = createMockAnomaly('SPOOFING', 'Completed');
+      const mediumAnomaly = createMockAnomaly('C/N0 dropped but AGC increased', 'Completed');
       mediumAnomaly.severity = 'Medium';
 
       (useAnomaly as jest.Mock).mockReturnValue({
@@ -230,7 +240,7 @@ describe('AnomalyScreen', () => {
       fireEvent.press(highButton);
 
       // Should show high severity anomaly
-      expect(getByText('JAMMING')).toBeTruthy();
+      expect(getByText('Possible Anomaly Detected')).toBeTruthy();
 
       // Should show filtered count
       expect(getByText(/Detected Anomalies \(1\)/)).toBeTruthy();
@@ -238,8 +248,8 @@ describe('AnomalyScreen', () => {
 
     it('should show all anomalies when All filter is selected', () => {
       const anomalies = [
-        createMockAnomaly('JAMMING', 'Completed'),
-        createMockAnomaly('SPOOFING', 'Completed'),
+        createMockAnomaly('Both C/N0 and AGC dropped', 'Completed'),
+        createMockAnomaly('C/N0 dropped but AGC increased', 'Completed'),
       ];
 
       (useAnomaly as jest.Mock).mockReturnValue({
@@ -253,17 +263,17 @@ describe('AnomalyScreen', () => {
         clearAnomalies: mockClearAnomalies,
       });
 
-      const { getByText } = render(<AnomalyScreen />);
+      const { getAllByText, getByText } = render(<AnomalyScreen />);
 
-      expect(getByText('JAMMING')).toBeTruthy();
-      expect(getByText('SPOOFING')).toBeTruthy();
+      expect(getAllByText('Possible Anomaly Detected')).toHaveLength(2);
+      expect(getByText(/Reason: Both C\/N0 and AGC dropped/)).toBeTruthy();
       expect(getByText(/Detected Anomalies \(2\)/)).toBeTruthy();
     });
   });
 
   describe('anomaly display', () => {
     it('should display anomaly details', () => {
-      const anomaly = createMockAnomaly('JAMMING', 'Completed');
+      const anomaly = createMockAnomaly('Both C/N0 and AGC dropped', 'Completed');
 
       (useAnomaly as jest.Mock).mockReturnValue({
         isDetecting: false,
@@ -278,10 +288,10 @@ describe('AnomalyScreen', () => {
 
       const { getByText } = render(<AnomalyScreen />);
 
-      expect(getByText('JAMMING')).toBeTruthy();
+      expect(getByText('Possible Anomaly Detected')).toBeTruthy();
       expect(getByText('High')).toBeTruthy();
       expect(getByText('Completed')).toBeTruthy();
-      expect(getByText('JAMMING detected with High severity')).toBeTruthy();
+      expect(getByText('Possible anomaly detected: Both C/N0 and AGC dropped')).toBeTruthy();
     });
 
     it('should display start and end locations', () => {
@@ -330,8 +340,8 @@ describe('AnomalyScreen', () => {
     });
 
     it('should include active anomaly in the list', () => {
-      const activeAnomaly = createMockAnomaly('JAMMING', 'Active');
-      const completedAnomaly = createMockAnomaly('SPOOFING', 'Completed');
+      const activeAnomaly = createMockAnomaly('Both C/N0 and AGC dropped', 'Active');
+      const completedAnomaly = createMockAnomaly('C/N0 dropped but AGC increased', 'Completed');
 
       (useAnomaly as jest.Mock).mockReturnValue({
         isDetecting: true,
@@ -344,10 +354,10 @@ describe('AnomalyScreen', () => {
         clearAnomalies: mockClearAnomalies,
       });
 
-      const { getByText } = render(<AnomalyScreen />);
+      const { getAllByText, getByText } = render(<AnomalyScreen />);
 
-      expect(getByText('JAMMING')).toBeTruthy();
-      expect(getByText('SPOOFING')).toBeTruthy();
+      expect(getAllByText('Possible Anomaly Detected')).toHaveLength(2);
+      expect(getByText(/Reason: Both C\/N0 and AGC dropped/)).toBeTruthy();
       expect(getByText('Active')).toBeTruthy();
     });
   });
@@ -416,10 +426,7 @@ describe('AnomalyScreen', () => {
       const startButton = getByText('Start Detection');
       fireEvent.press(startButton);
 
-      expect(Alert.alert).toHaveBeenCalledWith(
-        'Start GNSS Tracking First',
-        expect.any(String)
-      );
+      expect(Alert.alert).toHaveBeenCalledWith('Start GNSS Tracking First', expect.any(String));
       expect(mockStartDetection).not.toHaveBeenCalled();
     });
 
@@ -446,7 +453,7 @@ describe('AnomalyScreen', () => {
 
   describe('clear data functionality', () => {
     it('should show confirmation alert when Clear Data pressed', () => {
-      const anomaly = createMockAnomaly('JAMMING', 'Completed');
+      const anomaly = createMockAnomaly('Both C/N0 and AGC dropped', 'Completed');
 
       (useAnomaly as jest.Mock).mockReturnValue({
         isDetecting: false,
@@ -470,7 +477,7 @@ describe('AnomalyScreen', () => {
         expect.arrayContaining([
           expect.objectContaining({ text: 'Cancel' }),
           expect.objectContaining({ text: 'Clear' }),
-        ])
+        ]),
       );
     });
 
@@ -574,13 +581,17 @@ describe('AnomalyScreen', () => {
 // Helper functions
 
 function createMockAnomaly(
-  type: 'JAMMING' | 'SPOOFING' | 'SIGNAL_DEGRADATION',
-  status: string
+  reason:
+    | 'Both C/N0 and AGC dropped'
+    | 'C/N0 dropped but AGC increased'
+    | 'C/N0 dropped but AGC stable/unavailable',
+  status: string,
 ): GnssAnomalyEvent {
   const now = Date.now();
   return {
-    id: `anomaly_${now}_${type}`,
-    type,
+    id: `anomaly_${now}_${reason}`,
+    type: 'ANOMALY',
+    reason,
     severity: 'High',
     status,
     startTime: now - 30000,
@@ -591,18 +602,23 @@ function createMockAnomaly(
       longitude: 19.93481,
       time: now - 30000,
     },
-    endLocation: status === 'Completed' ? {
-      provider: 'gps',
-      latitude: 60.09750,
-      longitude: 19.93500,
-      time: now,
-    } : null,
-    path: [{
-      provider: 'gps',
-      latitude: 60.09726,
-      longitude: 19.93481,
-      time: now - 30000,
-    }],
+    endLocation:
+      status === 'Completed'
+        ? {
+            provider: 'gps',
+            latitude: 60.0975,
+            longitude: 19.935,
+            time: now,
+          }
+        : null,
+    path: [
+      {
+        provider: 'gps',
+        latitude: 60.09726,
+        longitude: 19.93481,
+        time: now - 30000,
+      },
+    ],
     metrics: {
       cn0Drop: 15.5,
       agcDrop: -10.2,
@@ -611,7 +627,7 @@ function createMockAnomaly(
       baselineAgc: -8.0,
       avgAgc: -10.2,
     },
-    description: `${type} detected with High severity`,
+    description: `Possible anomaly detected: ${reason}`,
   };
 }
 
@@ -621,13 +637,14 @@ function createMockAnomalyWithLocations(): GnssAnomalyEvent {
 
   const path: GnssLocation[] = [
     { provider: 'gps', latitude: 60.09726, longitude: 19.93481, time: startTime },
-    { provider: 'gps', latitude: 60.09738, longitude: 19.93490, time: startTime + 10000 },
-    { provider: 'gps', latitude: 60.09750, longitude: 19.93500, time: endTime },
+    { provider: 'gps', latitude: 60.09738, longitude: 19.9349, time: startTime + 10000 },
+    { provider: 'gps', latitude: 60.0975, longitude: 19.935, time: endTime },
   ];
 
   return {
     id: 'anomaly_with_path',
-    type: 'JAMMING',
+    type: 'ANOMALY',
+    reason: 'Both C/N0 and AGC dropped',
     severity: 'High',
     status: 'Completed',
     startTime,

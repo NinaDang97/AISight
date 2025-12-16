@@ -25,13 +25,13 @@ describe('AnomalyStorage', () => {
 
   describe('saveAnomalies', () => {
     it('should save anomalies to AsyncStorage', async () => {
-      const anomalies: GnssAnomalyEvent[] = [createMockAnomaly('JAMMING')];
+      const anomalies: GnssAnomalyEvent[] = [createMockAnomaly('Both C/N0 and AGC dropped')];
 
       await AnomalyStorage.saveAnomalies(anomalies);
 
       expect(AsyncStorage.setItem).toHaveBeenCalledWith(
         '@aisight_anomalies',
-        JSON.stringify(anomalies)
+        JSON.stringify(anomalies),
       );
     });
 
@@ -46,8 +46,8 @@ describe('AnomalyStorage', () => {
   describe('loadAnomalies', () => {
     it('should load anomalies from AsyncStorage', async () => {
       const anomalies: GnssAnomalyEvent[] = [
-        createMockAnomaly('JAMMING'),
-        createMockAnomaly('SPOOFING'),
+        createMockAnomaly('Both C/N0 and AGC dropped'),
+        createMockAnomaly('C/N0 dropped but AGC increased'),
       ];
       (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify(anomalies));
 
@@ -55,8 +55,10 @@ describe('AnomalyStorage', () => {
 
       expect(AsyncStorage.getItem).toHaveBeenCalledWith('@aisight_anomalies');
       expect(result).toHaveLength(2);
-      expect(result[0].type).toBe('JAMMING');
-      expect(result[1].type).toBe('SPOOFING');
+      expect(result[0].type).toBe('ANOMALY');
+      expect(result[0].reason).toBe('Both C/N0 and AGC dropped');
+      expect(result[1].type).toBe('ANOMALY');
+      expect(result[1].reason).toBe('C/N0 dropped but AGC increased');
     });
 
     it('should return empty array if no data exists', async () => {
@@ -76,7 +78,7 @@ describe('AnomalyStorage', () => {
     });
 
     it('should parse JSON correctly', async () => {
-      const anomaly = createMockAnomaly('JAMMING');
+      const anomaly = createMockAnomaly('Both C/N0 and AGC dropped');
       (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify([anomaly]));
 
       const result = await AnomalyStorage.loadAnomalies();
@@ -89,12 +91,10 @@ describe('AnomalyStorage', () => {
 
   describe('addAnomaly', () => {
     it('should add anomaly to beginning of existing list', async () => {
-      const existingAnomaly = createMockAnomaly('JAMMING');
-      const newAnomaly = createMockAnomaly('SPOOFING');
+      const existingAnomaly = createMockAnomaly('Both C/N0 and AGC dropped');
+      const newAnomaly = createMockAnomaly('C/N0 dropped but AGC increased');
 
-      (AsyncStorage.getItem as jest.Mock).mockResolvedValue(
-        JSON.stringify([existingAnomaly])
-      );
+      (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify([existingAnomaly]));
 
       await AnomalyStorage.addAnomaly(newAnomaly);
 
@@ -102,12 +102,14 @@ describe('AnomalyStorage', () => {
       const savedAnomalies = JSON.parse(savedData);
 
       expect(savedAnomalies).toHaveLength(2);
-      expect(savedAnomalies[0].type).toBe('SPOOFING'); // New anomaly first
-      expect(savedAnomalies[1].type).toBe('JAMMING');
+      expect(savedAnomalies[0].type).toBe('ANOMALY');
+      expect(savedAnomalies[0].reason).toBe('C/N0 dropped but AGC increased'); // New anomaly first
+      expect(savedAnomalies[1].type).toBe('ANOMALY');
+      expect(savedAnomalies[1].reason).toBe('Both C/N0 and AGC dropped');
     });
 
     it('should add anomaly to empty list', async () => {
-      const newAnomaly = createMockAnomaly('JAMMING');
+      const newAnomaly = createMockAnomaly('Both C/N0 and AGC dropped');
       (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
 
       await AnomalyStorage.addAnomaly(newAnomaly);
@@ -116,25 +118,28 @@ describe('AnomalyStorage', () => {
       const savedAnomalies = JSON.parse(savedData);
 
       expect(savedAnomalies).toHaveLength(1);
-      expect(savedAnomalies[0].type).toBe('JAMMING');
+      expect(savedAnomalies[0].type).toBe('ANOMALY');
+      expect(savedAnomalies[0].reason).toBe('Both C/N0 and AGC dropped');
     });
 
     it('should throw error on failure', async () => {
       (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
       (AsyncStorage.setItem as jest.Mock).mockRejectedValue(new Error('Write error'));
 
-      await expect(AnomalyStorage.addAnomaly(createMockAnomaly('JAMMING'))).rejects.toThrow();
+      await expect(
+        AnomalyStorage.addAnomaly(createMockAnomaly('Both C/N0 and AGC dropped')),
+      ).rejects.toThrow();
     });
   });
 
   describe('deleteAnomaly', () => {
     it('should delete specific anomaly by ID', async () => {
-      const anomaly1 = createMockAnomaly('JAMMING', 'anomaly_1');
-      const anomaly2 = createMockAnomaly('SPOOFING', 'anomaly_2');
-      const anomaly3 = createMockAnomaly('SIGNAL_DEGRADATION', 'anomaly_3');
+      const anomaly1 = createMockAnomaly('Both C/N0 and AGC dropped', 'anomaly_1');
+      const anomaly2 = createMockAnomaly('C/N0 dropped but AGC increased', 'anomaly_2');
+      const anomaly3 = createMockAnomaly('C/N0 dropped but AGC stable/unavailable', 'anomaly_3');
 
       (AsyncStorage.getItem as jest.Mock).mockResolvedValue(
-        JSON.stringify([anomaly1, anomaly2, anomaly3])
+        JSON.stringify([anomaly1, anomaly2, anomaly3]),
       );
 
       await AnomalyStorage.deleteAnomaly('anomaly_2');
@@ -149,7 +154,7 @@ describe('AnomalyStorage', () => {
     });
 
     it('should handle deleting non-existent ID gracefully', async () => {
-      const anomaly = createMockAnomaly('JAMMING', 'anomaly_1');
+      const anomaly = createMockAnomaly('Both C/N0 and AGC dropped', 'anomaly_1');
       (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify([anomaly]));
 
       await AnomalyStorage.deleteAnomaly('non_existent_id');
@@ -161,7 +166,9 @@ describe('AnomalyStorage', () => {
     });
 
     it('should throw error on failure', async () => {
-      (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify([createMockAnomaly('JAMMING', 'anomaly_1')]));
+      (AsyncStorage.getItem as jest.Mock).mockResolvedValue(
+        JSON.stringify([createMockAnomaly('Both C/N0 and AGC dropped', 'anomaly_1')]),
+      );
       (AsyncStorage.setItem as jest.Mock).mockRejectedValue(new Error('Write error'));
 
       await expect(AnomalyStorage.deleteAnomaly('anomaly_1')).rejects.toThrow('Write error');
@@ -185,9 +192,9 @@ describe('AnomalyStorage', () => {
   describe('getCount', () => {
     it('should return count of stored anomalies', async () => {
       const anomalies = [
-        createMockAnomaly('JAMMING'),
-        createMockAnomaly('SPOOFING'),
-        createMockAnomaly('SIGNAL_DEGRADATION'),
+        createMockAnomaly('Both C/N0 and AGC dropped'),
+        createMockAnomaly('C/N0 dropped but AGC increased'),
+        createMockAnomaly('C/N0 dropped but AGC stable/unavailable'),
       ];
       (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify(anomalies));
 
@@ -232,7 +239,7 @@ describe('AnomalyStorage', () => {
       expect(startFeature).toBeDefined();
       expect(startFeature.geometry.type).toBe('Point');
       expect(startFeature.geometry.coordinates).toEqual([19.93481, 60.09726]);
-      expect(startFeature.properties.anomalyType).toBe('JAMMING');
+      expect(startFeature.properties.anomalyType).toBe('ANOMALY');
       expect(startFeature.properties.severity).toBe('High');
       expect(startFeature.properties.timestamp).toBe(anomaly.startTime);
     });
@@ -245,12 +252,12 @@ describe('AnomalyStorage', () => {
 
       expect(endFeature).toBeDefined();
       expect(endFeature.geometry.type).toBe('Point');
-      expect(endFeature.geometry.coordinates).toEqual([19.93500, 60.09750]);
+      expect(endFeature.geometry.coordinates).toEqual([19.935, 60.0975]);
       expect(endFeature.properties.timestamp).toBe(anomaly.endTime);
     });
 
     it('should not create end point for active anomaly', () => {
-      const anomaly = createMockAnomaly('JAMMING');
+      const anomaly = createMockAnomaly('Both C/N0 and AGC dropped');
       // Active anomaly has no endLocation or endTime
 
       const geoJSON = AnomalyStorage.anomalyToGeoJSON(anomaly) as any;
@@ -273,7 +280,7 @@ describe('AnomalyStorage', () => {
     });
 
     it('should not create LineString for single point path', () => {
-      const anomaly = createMockAnomaly('JAMMING');
+      const anomaly = createMockAnomaly('Both C/N0 and AGC dropped');
       // Default mock has single point path
 
       const geoJSON = AnomalyStorage.anomalyToGeoJSON(anomaly) as any;
@@ -283,12 +290,12 @@ describe('AnomalyStorage', () => {
     });
 
     it('should format anomaly type in description', () => {
-      const anomaly = createMockAnomaly('SIGNAL_DEGRADATION');
+      const anomaly = createMockAnomaly('C/N0 dropped but AGC stable/unavailable');
 
       const geoJSON = AnomalyStorage.anomalyToGeoJSON(anomaly) as any;
       const startFeature = geoJSON.features[0];
 
-      expect(startFeature.properties.description).toContain('SIGNAL DEGRADATION');
+      expect(startFeature.properties.description).toContain('ANOMALY');
     });
 
     it('should include all metrics in path properties', () => {
@@ -307,18 +314,18 @@ describe('AnomalyStorage', () => {
 
   describe('exportToJSON', () => {
     it('should export anomaly as formatted JSON string', () => {
-      const anomaly = createMockAnomaly('JAMMING');
+      const anomaly = createMockAnomaly('Both C/N0 and AGC dropped');
 
       const json = AnomalyStorage.exportToJSON(anomaly);
       const parsed = JSON.parse(json);
 
       expect(parsed.id).toBe(anomaly.id);
-      expect(parsed.type).toBe('JAMMING');
+      expect(parsed.type).toBe('ANOMALY');
       expect(parsed.severity).toBe('High');
     });
 
     it('should use 2-space indentation', () => {
-      const anomaly = createMockAnomaly('JAMMING');
+      const anomaly = createMockAnomaly('Both C/N0 and AGC dropped');
 
       const json = AnomalyStorage.exportToJSON(anomaly);
 
@@ -380,7 +387,7 @@ describe('AnomalyStorage', () => {
     });
 
     it('should show "Ongoing" for active anomaly without end time', () => {
-      const anomaly = createMockAnomaly('JAMMING');
+      const anomaly = createMockAnomaly('Both C/N0 and AGC dropped');
       anomaly.endTime = undefined;
 
       const csv = AnomalyStorage.exportToCSV(anomaly);
@@ -445,7 +452,7 @@ describe('AnomalyStorage', () => {
     });
 
     it('should handle missing start/end locations', () => {
-      const anomaly = createMockAnomaly('JAMMING');
+      const anomaly = createMockAnomaly('Both C/N0 and AGC dropped');
       anomaly.startLocation = null;
       anomaly.endLocation = null;
 
@@ -466,13 +473,17 @@ describe('AnomalyStorage', () => {
 // Helper functions
 
 function createMockAnomaly(
-  type: 'JAMMING' | 'SPOOFING' | 'SIGNAL_DEGRADATION',
-  id?: string
+  reason:
+    | 'Both C/N0 and AGC dropped'
+    | 'C/N0 dropped but AGC increased'
+    | 'C/N0 dropped but AGC stable/unavailable',
+  id?: string,
 ): GnssAnomalyEvent {
   const now = Date.now();
   return {
     id: id || `anomaly_${now}_test`,
-    type,
+    type: 'ANOMALY',
+    reason,
     severity: 'High',
     status: 'active',
     startTime: now - 10000,
@@ -484,12 +495,14 @@ function createMockAnomaly(
       time: now - 10000,
     },
     endLocation: null,
-    path: [{
-      provider: 'gps',
-      latitude: 60.09726,
-      longitude: 19.93481,
-      time: now - 10000,
-    }],
+    path: [
+      {
+        provider: 'gps',
+        latitude: 60.09726,
+        longitude: 19.93481,
+        time: now - 10000,
+      },
+    ],
     metrics: {
       cn0Drop: 15.5,
       agcDrop: -10.2,
@@ -498,7 +511,7 @@ function createMockAnomaly(
       baselineAgc: -8.0,
       avgAgc: -10.2,
     },
-    description: `${type} detected with High severity`,
+    description: `Possible anomaly detected: ${reason}`,
   };
 }
 
@@ -508,13 +521,14 @@ function createMockAnomalyWithPath(): GnssAnomalyEvent {
 
   const path: GnssLocation[] = [
     { provider: 'gps', latitude: 60.09726, longitude: 19.93481, time: startTime },
-    { provider: 'gps', latitude: 60.09738, longitude: 19.93490, time: startTime + 10000 },
-    { provider: 'gps', latitude: 60.09750, longitude: 19.93500, time: endTime },
+    { provider: 'gps', latitude: 60.09738, longitude: 19.9349, time: startTime + 10000 },
+    { provider: 'gps', latitude: 60.0975, longitude: 19.935, time: endTime },
   ];
 
   return {
     id: 'anomaly_path_test',
-    type: 'JAMMING',
+    type: 'ANOMALY',
+    reason: 'Both C/N0 and AGC dropped',
     severity: 'High',
     status: 'completed',
     startTime,

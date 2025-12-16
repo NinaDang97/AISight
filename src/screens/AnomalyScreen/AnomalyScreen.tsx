@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaWrapper } from '../../components/common/SafeAreaWrapper';
-import { colors, typography, spacing, theme } from '../../styles';
+import { colors, spacing, theme, typography } from '../../styles';
 import { useAnomaly } from '../../components/contexts';
 import { useGnss } from '../../components/contexts';
 import { calculatePathDistance, formatDuration, formatLocation } from '../../services/anomaly';
@@ -21,9 +21,8 @@ export const AnomalyScreen = () => {
     : anomalyContext.detectedAnomalies;
 
   // Filter anomalies based on selected filter
-  const filteredAnomalies = filter === 'All'
-    ? allAnomalies
-    : allAnomalies.filter(a => a.severity === filter);
+  const filteredAnomalies =
+    filter === 'All' ? allAnomalies : allAnomalies.filter(a => a.severity === filter);
 
   // Calculate stats
   const stats = {
@@ -37,18 +36,25 @@ export const AnomalyScreen = () => {
 
   const getSeverityColor = (severity: string) => {
     switch (severity.toLowerCase()) {
-      case 'high': return colors.error;
-      case 'medium': return colors.warning;
-      case 'low': return colors.success;
-      default: return colors.textSecondary;
+      case 'high':
+        return colors.error;
+      case 'medium':
+        return colors.warning;
+      case 'low':
+        return colors.success;
+      default:
+        return colors.textSecondary;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'active': return colors.error;
-      case 'completed': return colors.success;
-      default: return colors.textSecondary;
+      case 'active':
+        return colors.error;
+      case 'completed':
+        return colors.success;
+      default:
+        return colors.textSecondary;
     }
   };
 
@@ -76,21 +82,21 @@ export const AnomalyScreen = () => {
     if (!anomalyContext.currentEpoch) {
       return {
         isValid: false,
-        message: 'No GNSS measurements available yet. Please wait a moment and try again.'
+        message: 'No GNSS measurements available yet. Please wait a moment and try again.',
       };
     }
 
     if (anomalyContext.currentEpoch.satelliteCount < MIN_SATELLITES) {
       return {
         isValid: false,
-        message: `Poor signal quality: Only ${anomalyContext.currentEpoch.satelliteCount} satellites visible (minimum: ${MIN_SATELLITES}). Please move to an area with clear sky view.`
+        message: `Poor signal quality: Only ${anomalyContext.currentEpoch.satelliteCount} satellites visible (minimum: ${MIN_SATELLITES}). Please move to an area with clear sky view.`,
       };
     }
 
     if (anomalyContext.currentEpoch.avgCn0DbHz < MIN_CN0) {
       return {
         isValid: false,
-        message: `Poor signal quality: C/N0 is ${anomalyContext.currentEpoch.avgCn0DbHz.toFixed(1)} dB-Hz (minimum: ${MIN_CN0} dB-Hz). Please move to an area with clear sky view.`
+        message: `Poor signal quality: C/N0 is ${anomalyContext.currentEpoch.avgCn0DbHz.toFixed(1)} dB-Hz (minimum: ${MIN_CN0} dB-Hz). Please move to an area with clear sky view.`,
       };
     }
 
@@ -102,7 +108,7 @@ export const AnomalyScreen = () => {
     if (!gnss.isTracking) {
       Alert.alert(
         'Start GNSS Tracking First',
-        'Please start GNSS tracking from the GNSS screen before enabling anomaly detection.'
+        'Please start GNSS tracking from the GNSS screen before enabling anomaly detection.',
       );
       return;
     }
@@ -113,18 +119,14 @@ export const AnomalyScreen = () => {
       // Validate signal quality before starting
       const validation = validateSignalQuality();
       if (!validation.isValid) {
-        Alert.alert(
-          'Signal Quality Too Low',
-          validation.message,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Start Anyway',
-              style: 'destructive',
-              onPress: () => anomalyContext.startDetection(),
-            },
-          ]
-        );
+        Alert.alert('Signal Quality Too Low', validation.message, [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Start Anyway',
+            style: 'destructive',
+            onPress: () => anomalyContext.startDetection(),
+          },
+        ]);
         return;
       }
 
@@ -144,7 +146,7 @@ export const AnomalyScreen = () => {
           style: 'default',
           onPress: () => anomalyContext.recalibrate(),
         },
-      ]
+      ],
     );
   };
 
@@ -183,7 +185,7 @@ export const AnomalyScreen = () => {
                 <View
                   style={[
                     styles.progressBarFill,
-                    { width: `${anomalyContext.calibrationProgress}%` }
+                    { width: `${anomalyContext.calibrationProgress}%` },
                   ]}
                 />
               </View>
@@ -193,7 +195,8 @@ export const AnomalyScreen = () => {
               {anomalyContext.currentEpoch && (
                 <View style={styles.calibrationStats}>
                   <Text style={styles.calibrationStatText}>
-                    Current Signal - Satellites: {anomalyContext.currentEpoch.satelliteCount}, C/N0: {anomalyContext.currentEpoch.avgCn0DbHz.toFixed(1)} dB-Hz
+                    Current Signal - Satellites: {anomalyContext.currentEpoch.satelliteCount}, C/N0:{' '}
+                    {anomalyContext.currentEpoch.avgCn0DbHz.toFixed(1)} dB-Hz
                   </Text>
                 </View>
               )}
@@ -252,7 +255,7 @@ export const AnomalyScreen = () => {
               style={[
                 styles.controlButton,
                 styles.secondaryButton,
-                (allAnomalies.length === 0) && styles.disabledButton,
+                allAnomalies.length === 0 && styles.disabledButton,
               ]}
               onPress={() => {
                 if (allAnomalies.length > 0) {
@@ -266,7 +269,7 @@ export const AnomalyScreen = () => {
                         style: 'destructive',
                         onPress: anomalyContext.clearAnomalies,
                       },
-                    ]
+                    ],
                   );
                 }
               }}
@@ -296,13 +299,20 @@ export const AnomalyScreen = () => {
               <Text style={styles.statLabel}>Your Device</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={[styles.statNumber, { color: stats.activeNow > 0 ? colors.error : colors.success }]}>
+              <Text
+                style={[
+                  styles.statNumber,
+                  { color: stats.activeNow > 0 ? colors.error : colors.success },
+                ]}
+              >
                 {stats.activeNow}
               </Text>
               <Text style={styles.statLabel}>Active Now</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={[styles.statNumber, { color: colors.warning }]}>{stats.totalAnomalies}</Text>
+              <Text style={[styles.statNumber, { color: colors.warning }]}>
+                {stats.totalAnomalies}
+              </Text>
               <Text style={styles.statLabel}>Anomalies</Text>
             </View>
           </View>
@@ -318,16 +328,21 @@ export const AnomalyScreen = () => {
                 style={[
                   styles.filterButton,
                   filter === severity && styles.filterButtonActive,
-                  filter === severity && { backgroundColor: getSeverityColor(severity === 'All' ? 'Medium' : severity) }
+                  filter === severity && {
+                    backgroundColor: getSeverityColor(severity === 'All' ? 'Medium' : severity),
+                  },
                 ]}
                 onPress={() => setFilter(severity)}
               >
-                <Text style={[
-                  styles.filterButtonText,
-                  filter === severity && styles.filterButtonTextActive
-                ]}>
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    filter === severity && styles.filterButtonTextActive,
+                  ]}
+                >
                   {severity}
-                  {severity !== 'All' && ` (${stats[`${severity.toLowerCase()}Severity` as keyof typeof stats]})`}
+                  {severity !== 'All' &&
+                    ` (${stats[`${severity.toLowerCase()}Severity` as keyof typeof stats]})`}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -354,28 +369,31 @@ export const AnomalyScreen = () => {
                   key={anom.id}
                   style={[
                     styles.anomalyItem,
-                    index === filteredAnomalies.length - 1 && styles.lastItem
+                    index === filteredAnomalies.length - 1 && styles.lastItem,
                   ]}
                 >
                   <View style={styles.anomalyHeader}>
-                    <Text style={styles.anomalyTitle}>{anom.type.replace(/_/g, ' ')}</Text>
-                    <View style={[
-                      styles.severityBadge,
-                      { backgroundColor: getSeverityColor(anom.severity) }
-                    ]}>
+                    <Text style={styles.anomalyTitle}>Possible Anomaly Detected</Text>
+                    <View
+                      style={[
+                        styles.severityBadge,
+                        { backgroundColor: getSeverityColor(anom.severity) },
+                      ]}
+                    >
                       <Text style={styles.severityText}>{anom.severity}</Text>
                     </View>
                   </View>
 
                   <View style={styles.anomalyDetails}>
                     <Text style={styles.vesselName}>Current Device</Text>
-                    <View style={[
-                      styles.statusBadge,
-                      { backgroundColor: getStatusColor(anom.status) }
-                    ]}>
+                    <View
+                      style={[styles.statusBadge, { backgroundColor: getStatusColor(anom.status) }]}
+                    >
                       <Text style={styles.statusText}>{anom.status}</Text>
                     </View>
                   </View>
+
+                  <Text style={styles.anomalyReason}>Reason: {anom.reason}</Text>
 
                   <Text style={styles.anomalyLocation}>
                     Start: {formatLocation(anom.startLocation)}
@@ -391,12 +409,11 @@ export const AnomalyScreen = () => {
 
                   <View style={styles.anomalyMetrics}>
                     <Text style={styles.metricText}>
-                      Duration: {formatDuration(
-                        (anom.endTime || Date.now()) - anom.startTime
-                      )}
+                      Duration: {formatDuration((anom.endTime || Date.now()) - anom.startTime)}
                     </Text>
                     <Text style={styles.metricText}>
-                      Path: {anom.path.length} points ({calculatePathDistance(anom.path).toFixed(1)}m)
+                      Path: {anom.path.length} points ({calculatePathDistance(anom.path).toFixed(1)}
+                      m)
                     </Text>
                   </View>
 
@@ -636,6 +653,12 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textInverse,
     fontWeight: '500',
+  },
+  anomalyReason: {
+    ...typography.bodySmall,
+    color: colors.warning,
+    fontWeight: '600',
+    marginBottom: spacing.xsmall,
   },
   anomalyLocation: {
     ...typography.bodySmall,

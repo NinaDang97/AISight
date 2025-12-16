@@ -81,3 +81,6 @@ yarn-error.log
 .env.production
 # Keep the example file
 !.env.example
+
+# Claude Code
+.claude/

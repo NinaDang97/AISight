@@ -1,4 +1,4 @@
-import { NativeModules } from "react-native";
+import { NativeModules } from 'react-native';
 
 // ============================================================================
 // Type Definitions for GNSS Data
@@ -8,23 +8,23 @@ import { NativeModules } from "react-native";
  * Location data from Android LocationManager
  */
 export type GnssLocation = {
-  provider: string;      // "gps" or "network"
-  latitude: number;      // degrees
-  longitude: number;     // degrees
-  altitude?: number;     // meters above sea level
-  accuracy?: number;     // horizontal accuracy in meters
-  speed?: number;        // meters per second
-  bearing?: number;      // degrees (0-360, 0=North)
-  time: number;          // milliseconds since epoch
+  provider: string; // "gps" or "network"
+  latitude: number; // degrees
+  longitude: number; // degrees
+  altitude?: number; // meters above sea level
+  accuracy?: number; // horizontal accuracy in meters
+  speed?: number; // meters per second
+  bearing?: number; // degrees (0-360, 0=North)
+  time: number; // milliseconds since epoch
 };
 
 /**
  * GNSS satellite status data
  */
 export type GnssStatus = {
-  satellitesInView: number;              // total satellites visible
-  satellitesUsed: number;                // satellites used for position fix
-  avgCn0DbHz?: number;                   // average signal strength (dB-Hz)
+  satellitesInView: number; // total satellites visible
+  satellitesUsed: number; // satellites used for position fix
+  avgCn0DbHz?: number; // average signal strength (dB-Hz)
   constellations?: Record<string, number>; // e.g., { GPS: 12, GALILEO: 8 }
 };
 
@@ -32,12 +32,12 @@ export type GnssStatus = {
  * Raw GNSS measurement data (one per satellite)
  */
 export type GnssMeasurement = {
-  svid: number;              // satellite vehicle ID
-  cn0DbHz?: number;          // signal strength for this satellite
-  agcLevelDb?: number;       // Automatic Gain Control level in dB (Android 12+)
-  constellation?: string;    // GPS, GLONASS, GALILEO, etc.
+  svid: number; // satellite vehicle ID
+  cn0DbHz?: number; // signal strength for this satellite
+  agcLevelDb?: number; // Automatic Gain Control level in dB (Android 12+)
+  constellation?: string; // GPS, GLONASS, GALILEO, etc.
   carrierFrequencyHz?: number; // radio frequency (Hz)
-  timeNanos?: number;        // GNSS time (nanoseconds)
+  timeNanos?: number; // GNSS time (nanoseconds)
 };
 
 /**
@@ -45,18 +45,18 @@ export type GnssMeasurement = {
  */
 export type LoggingState = {
   isLogging: boolean;
-  logFilePath?: string;  // absolute path to CSV log file
-  linesWritten: number;  // number of rows written
+  logFilePath?: string; // absolute path to CSV log file
+  linesWritten: number; // number of rows written
 };
 
 /**
  * Log file information
  */
 export type LogFileInfo = {
-  name: string;          // filename (e.g., gnss_log_20251031_143022.csv)
-  path: string;          // absolute path to file
-  size: number;          // file size in bytes
-  lastModified: number;  // timestamp in milliseconds
+  name: string; // filename (e.g., gnss_log_20251031_143022.csv)
+  path: string; // absolute path to file
+  size: number; // file size in bytes
+  lastModified: number; // timestamp in milliseconds
 };
 
 // ============================================================================
@@ -105,10 +105,10 @@ export default GnssModule;
  * Epoch data - aggregated GNSS measurements over a time window (typically 1 second)
  */
 export type GnssEpoch = {
-  timestamp: number;           // milliseconds since epoch
-  avgCn0DbHz: number;          // average C/N0 across all satellites
-  avgAgcLevelDb?: number;      // average AGC level (if available on Android 12+)
-  satelliteCount: number;      // number of satellites in this epoch
+  timestamp: number; // milliseconds since epoch
+  avgCn0DbHz: number; // average C/N0 across all satellites
+  avgAgcLevelDb?: number; // average AGC level (if available on Android 12+)
+  satelliteCount: number; // number of satellites in this epoch
   location: GnssLocation | null; // location at this epoch
 };
 
@@ -117,12 +117,16 @@ export type GnssEpoch = {
  */
 export type GnssAnomalyEvent = {
   id: string;
-  type: 'JAMMING' | 'SPOOFING' | 'SIGNAL_DEGRADATION';
+  type: 'ANOMALY';
+  reason:
+    | 'Both C/N0 and AGC dropped'
+    | 'C/N0 dropped but AGC increased'
+    | 'C/N0 dropped but AGC stable/unavailable';
   severity: 'High' | 'Medium' | 'Low';
   status: 'Active' | 'Completed';
 
   // Start of anomaly
-  startTime: number;           // timestamp in ms
+  startTime: number; // timestamp in ms
   startLocation: GnssLocation | null;
 
   // End of anomaly (undefined if still active)
@@ -134,8 +138,8 @@ export type GnssAnomalyEvent = {
 
   // Detection metrics
   metrics: {
-    cn0Drop: number;           // % decrease from baseline
-    agcDrop?: number;          // % decrease from baseline (if available)
+    cn0Drop: number; // % decrease from baseline
+    agcDrop?: number; // % decrease from baseline (if available)
     avgCn0: number;
     avgAgc?: number;
     baselineCn0: number;
